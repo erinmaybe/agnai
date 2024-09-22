@@ -94,13 +94,13 @@ export function getStoppingStrings(opts: AdapterProps, extras: string[] = []) {
   return Array.from(unique.values()).filter((str) => !!str)
 }
 
-export function getSequenceBreakers(opts: AdapterProps, format:string) {
+export function getSequenceBreakers(opts: AdapterProps, format: string) {
   let breakers = opts.gen.drySequenceBreakers
-  if(format === "koboldcpp") {
+  if (format === 'koboldcpp') {
     return breakers
   }
-  if((format === "ooba" || format === "tabby") && breakers && breakers.length > 0) {
-    return "[\"".concat(breakers.join("\",\""), "\"]")
+  if ((format === 'ooba' || format === 'tabby') && breakers && breakers.length > 0) {
+    return '["'.concat(breakers.join('","'), '"]')
   }
   return ''
 }

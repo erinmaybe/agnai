@@ -295,7 +295,15 @@ export function getPresetFormData(ref: any) {
     }, {}) as Array<{ seq: string; bias: number }>
   ).filter((pb: any) => 'seq' in pb && 'bias' in pb)
 
-  const preset = { ...data, stopSequences, drySequenceBreakers, phraseBias, promptOrder, promptOrderFormat, json }
+  const preset = {
+    ...data,
+    stopSequences,
+    drySequenceBreakers,
+    phraseBias,
+    promptOrder,
+    promptOrderFormat,
+    json,
+  }
   return preset
 }
 

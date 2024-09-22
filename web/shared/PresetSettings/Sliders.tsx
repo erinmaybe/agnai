@@ -376,7 +376,7 @@ export const SliderSettings: Component<
           aiSetting={'numBeams'}
           format={props.format}
         />
-        
+
         <RangeInput
           fieldName="dryAllowedLength"
           label="DRY Allowed Length"
@@ -390,7 +390,7 @@ export const SliderSettings: Component<
           aiSetting={'dryAllowedLength'}
           format={props.format}
         />
-                
+
         <RangeInput
           fieldName="dryBase"
           label="DRY Base"
@@ -435,7 +435,6 @@ export const SliderSettings: Component<
 
         <SequenceBreakers inherit={props.inherit} service={props.service} format={props.format} />
       </Card>
-
     </div>
   )
 }

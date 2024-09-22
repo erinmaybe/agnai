@@ -420,13 +420,13 @@ function getStoppingStrings(opts: PayloadOpts, extras: string[] = []) {
   return Array.from(unique.values()).filter((str) => !!str)
 }
 
-export function getSequenceBreakers(opts: PayloadOpts, format:string) {
+export function getSequenceBreakers(opts: PayloadOpts, format: string) {
   let breakers = opts.settings?.drySequenceBreakers
-  if(format === "koboldcpp") {
+  if (format === 'koboldcpp') {
     return breakers
   }
-  if((format === "ooba" || format === "tabby") && breakers && breakers.length > 0) {
-    return "[\"".concat(breakers.join("\",\""), "\"]")
+  if ((format === 'ooba' || format === 'tabby') && breakers && breakers.length > 0) {
+    return '["'.concat(breakers.join('","'), '"]')
   }
   return ''
 }
