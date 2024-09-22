@@ -139,3 +139,64 @@ export const StoppingStrings: Component<{
     </div>
   )
 }
+
+export const SequenceBreakers: Component<{
+  inherit?: Partial<AppSchema.GenSettings>
+  service?: AIAdapter
+  format?: ThirdPartyFormat
+}> = (props) => {
+  const [strings, setStrings] = createSignal<string[]>(props.inherit?.drySequenceBreakers || [''])
+
+  const addString = () => {
+    const next = strings().concat('')
+    setStrings(next)
+  }
+
+  const removeString = (i: number) => {
+    const next = strings().slice()
+    next.splice(i, 1)
+    setStrings(next)
+  }
+
+  const hide = createMemo(() => {
+    const isValid = isValidServiceSetting(props.service, props.format, 'drySequenceBreakers')
+    return isValid ? '' : ' hidden'
+  })
+
+  return (
+    <div class={hide()}>
+      <FormLabel
+        label={
+          <div class="flex gap-2">
+            DRY Sequence Breakers{' '}
+            <a class="link" onClick={addString}>
+              Add +
+            </a>
+          </div>
+        }
+        helperText="Tokens across which sequence matching is not considered in DRY penalties."
+      />
+      <div class="flex flex-col gap-2 text-sm">
+        <For each={strings()}>
+          {(each, i) => (
+            <div class="flex w-full gap-1">
+              <TextInput
+                fieldName={`breakers.${i()}`}
+                value={each}
+                parentClass="w-full"
+                placeholder="E.g. \n<|user|>"
+                onChange={(ev) => {
+                  const next = strings().map((t, idx) => (idx === i() ? ev.currentTarget.value : t))
+                  setStrings(next)
+                }}
+              />
+              <Button class="icon-button" schema="clear" onClick={() => removeString(i())}>
+                <MinusCircle />
+              </Button>
+            </div>
+          )}
+        </For>
+      </div>
+    </div>
+  )
+}

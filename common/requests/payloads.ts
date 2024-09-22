@@ -180,6 +180,11 @@ function getBasePayload(opts: PayloadOpts, stops: string[] = []) {
       stream: gen.streamResponse,
       token_healing: gen.tokenHealing,
       temperature_last: gen.minP ? !!gen.tempLast : false,
+      dry_allowed_length: gen.dryAllowedLength,
+      dry_base: gen.dryBase,
+      dry_multiplier: gen.dryMultiplier,
+      dry_sequence_breakers: getSequenceBreakers(opts, format),
+      dry_range: gen.dryRange,
       json_schema,
     }
 
@@ -244,6 +249,10 @@ function getBasePayload(opts: PayloadOpts, stops: string[] = []) {
       smoothing_factor: gen.smoothingFactor,
       smoothing_curve: gen.smoothingCurve,
       tfs: gen.tailFreeSampling,
+      dry_allowed_length: gen.dryAllowedLength,
+      dry_base: gen.dryBase,
+      dry_multiplier: gen.dryMultiplier,
+      dry_sequence_breakers: getSequenceBreakers(opts, format),
     }
 
     if (gen.dynatemp_range) {
@@ -341,6 +350,10 @@ function getBasePayload(opts: PayloadOpts, stops: string[] = []) {
       trim_stop: gen.trimStop,
       rep_pen_range: gen.repetitionPenaltyRange,
       rep_pen_slope: gen.repetitionPenaltySlope,
+      dry_allowed_length: gen.dryAllowedLength,
+      dry_base: gen.dryBase,
+      dry_multiplier: gen.dryMultiplier,
+      dry_sequence_breakers: getSequenceBreakers(opts, format),
     }
     return body
   }
@@ -405,4 +418,15 @@ function getStoppingStrings(opts: PayloadOpts, extras: string[] = []) {
   }
 
   return Array.from(unique.values()).filter((str) => !!str)
+}
+
+export function getSequenceBreakers(opts: PayloadOpts, format:string) {
+  let breakers = opts.settings?.drySequenceBreakers
+  if(format === "koboldcpp") {
+    return breakers
+  }
+  if((format === "ooba" || format === "tabby") && breakers && breakers.length > 0) {
+    return "[\"".concat(breakers.join("\",\""), "\"]")
+  }
+  return ''
 }

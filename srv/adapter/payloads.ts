@@ -1,5 +1,5 @@
 import { AdapterProps } from './type'
-import { getStoppingStrings } from './prompt'
+import { getStoppingStrings, getSequenceBreakers } from './prompt'
 import { clamp, neat } from '/common/util'
 import { JsonSchema, toJsonSchema } from '/common/prompt'
 import { defaultPresets } from '/common/default-preset'
@@ -242,6 +242,11 @@ function getBasePayload(opts: AdapterProps, stops: string[] = []) {
       stream: gen.streamResponse,
       token_healing: gen.tokenHealing,
       temperature_last: gen.minP ? !!gen.tempLast : false,
+      dry_allowed_length: gen.dryAllowedLength,
+      dry_base: gen.dryBase,
+      dry_multiplier: gen.dryMultiplier,
+      dry_sequence_breakers: gen.drySequenceBreakers,
+      dry_range: gen.dryRange,
       json_schema,
     }
 
@@ -306,6 +311,10 @@ function getBasePayload(opts: AdapterProps, stops: string[] = []) {
       smoothing_factor: gen.smoothingFactor,
       smoothing_curve: gen.smoothingCurve,
       tfs: gen.tailFreeSampling,
+      dry_allowed_length: gen.dryAllowedLength,
+      dry_base: gen.dryBase,
+      dry_multiplier: gen.dryMultiplier,
+      dry_sequence_breakers: getSequenceBreakers(opts, format),
     }
 
     if (gen.dynatemp_range) {
@@ -403,6 +412,10 @@ function getBasePayload(opts: AdapterProps, stops: string[] = []) {
       trim_stop: gen.trimStop,
       rep_pen_range: gen.repetitionPenaltyRange,
       rep_pen_slope: gen.repetitionPenaltySlope,
+      dry_allowed_length: gen.dryAllowedLength,
+      dry_base: gen.dryBase,
+      dry_multiplier: gen.dryMultiplier,
+      dry_sequence_breakers: getSequenceBreakers(opts, format),
     }
     return body
   }

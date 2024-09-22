@@ -334,6 +334,11 @@ type SafePreset = Pick<
   | 'dynatemp_exponent'
   | 'smoothingFactor'
   | 'smoothingCurve'
+  | 'dryAllowedLength'
+  | 'dryBase'
+  | 'dryMultiplier'
+  | 'dryRange'
+  | 'drySequenceBreakers'
 >
 
 export async function exportPreset(preset: AppSchema.UserGenPreset) {

@@ -62,6 +62,11 @@ export const presetValidator = {
   cfgScale: 'number?',
   cfgOppose: 'string?',
   phraseRepPenalty: 'string?',
+  dryAllowedLength: 'number?',
+  dryBase: 'number?',
+  dryMultiplier: 'number?',
+  dryRange: 'number?',
+  drySequenceBreakers: ['string?'],
 
   stopSequences: ['string?'],
   trimStop: 'boolean?',

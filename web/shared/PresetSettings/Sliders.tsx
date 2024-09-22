@@ -6,6 +6,7 @@ import { ThirdPartyFormat } from '../../../common/adapters'
 import { Card } from '../Card'
 import { A } from '@solidjs/router'
 import { PresetProps } from './types'
+import { SequenceBreakers } from '../PhraseBias'
 
 export const SliderSettings: Component<
   PresetProps & {
@@ -375,7 +376,66 @@ export const SliderSettings: Component<
           aiSetting={'numBeams'}
           format={props.format}
         />
+        
+        <RangeInput
+          fieldName="dryAllowedLength"
+          label="DRY Allowed Length"
+          helperText="Number of tokens allowed to repeat without penalty."
+          min={1}
+          max={20}
+          step={1}
+          value={props.inherit?.dryAllowedLength ?? 2}
+          disabled={props.disabled}
+          service={props.service}
+          aiSetting={'dryAllowedLength'}
+          format={props.format}
+        />
+                
+        <RangeInput
+          fieldName="dryBase"
+          label="DRY Base"
+          helperText="Controls how fast the DRY penalty grows with sequence length."
+          min={1}
+          max={4}
+          step={0.01}
+          value={props.inherit?.dryBase ?? 0.8}
+          disabled={props.disabled}
+          service={props.service}
+          aiSetting={'dryBase'}
+          format={props.format}
+        />
+
+        <RangeInput
+          fieldName="dryMultiplier"
+          label="DRY Multiplier"
+          helperText="Controls the magnitude of the DRY penalty for the shortest penalized sequences. (Set to 0 to disable DRY)"
+          min={0}
+          max={5}
+          step={0.01}
+          value={props.inherit?.dryMultiplier ?? 0}
+          disabled={props.disabled}
+          service={props.service}
+          aiSetting={'dryMultiplier'}
+          format={props.format}
+        />
+
+        <RangeInput
+          fieldName="dryRange"
+          label="DRY Penalty Range"
+          helperText="Number of tokens allowed to repeat without penalty."
+          min={0}
+          max={4096}
+          step={1}
+          value={props.inherit?.dryRange ?? 0}
+          disabled={props.disabled}
+          service={props.service}
+          aiSetting={'dryRange'}
+          format={props.format}
+        />
+
+        <SequenceBreakers inherit={props.inherit} service={props.service} format={props.format} />
       </Card>
+
     </div>
   )
 }

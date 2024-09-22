@@ -356,6 +356,7 @@ export const samplerDisableValues: { [key in keyof PresetAISettings]?: number } 
   frequencyPenalty: 0,
   presencePenalty: 0,
   tailFreeSampling: 1,
+  dryMultiplier: 0,
 }
 
 export function adaptersToOptions(adapters: AIAdapter[]) {
@@ -425,6 +426,11 @@ export const settingLabels: { [key in keyof PresetAISettings]: string } = {
   mirostatToggle: 'Mirostat Toggle',
   etaCutoff: 'ETA Cutoff',
   epsilonCutoff: 'Epsilon Cutoff',
+  dryMultiplier: 'DRY Multiplier',
+  dryBase: 'DRY Base',
+  dryAllowedLength: 'DRY Allowed Length',
+  dryRange: 'DRY Penalty Range',
+  drySequenceBreakers: 'DRY Sequence Breakers',
 }
 
 export const samplerOrders: { [key in AIAdapter]?: Array<keyof PresetAISettings> } = {

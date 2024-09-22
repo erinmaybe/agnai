@@ -278,6 +278,13 @@ export function getPresetFormData(ref: any) {
     return prev
   }, [])
 
+  const drySequenceBreakers = entries.reduce<string[]>((prev, [key, value]) => {
+    if (key.startsWith('breakers.') && value.length) {
+      prev.push(value)
+    }
+    return prev
+  }, [])
+
   const phraseBias = Object.values(
     entries.reduce<any>((prev, [key, value]) => {
       if (!key.startsWith('phraseBias.')) return prev
@@ -288,7 +295,7 @@ export function getPresetFormData(ref: any) {
     }, {}) as Array<{ seq: string; bias: number }>
   ).filter((pb: any) => 'seq' in pb && 'bias' in pb)
 
-  const preset = { ...data, stopSequences, phraseBias, promptOrder, promptOrderFormat, json }
+  const preset = { ...data, stopSequences, drySequenceBreakers, phraseBias, promptOrder, promptOrderFormat, json }
   return preset
 }
 

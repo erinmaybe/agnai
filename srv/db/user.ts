@@ -203,6 +203,11 @@ export async function createUser(newUser: NewUser, admin?: boolean) {
       tokenHealing: sub.tokenHealing,
       tempLast: sub.tempLast,
       trimStop: sub.trimStop,
+      dryAllowedLength: sub.dryAllowedLength,
+      dryBase: sub.dryBase,
+      dryMultiplier: sub.dryMultiplier,
+      dryRange: sub.dryRange,
+      drySequenceBreakers: sub.drySequenceBreakers,
     }
 
     await db('gen-setting').insertOne(preset)

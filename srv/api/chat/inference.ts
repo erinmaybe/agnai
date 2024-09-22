@@ -63,6 +63,11 @@ const validInferenceApi = {
   ban_eos_token: 'boolean?',
   add_bos_token: 'boolean?',
   temperature_last: 'boolean?',
+  dry_allowed_length: 'number?',
+  dry_base: 'number?',
+  dry_multiplier: 'number?',
+  dry_range: 'number?',
+  dry_sequence_breakers: ['string'],
   json_schema: 'any?',
 } as const
 
@@ -292,6 +297,11 @@ export const inferenceApi = wrap(async (req, res) => {
     banEosToken: body.ban_eos_token,
     addBosToken: body.add_bos_token,
     tempLast: body.temperature_last,
+    dryAllowedLength: body.dry_allowed_length,
+    dryBase: body.dry_base,
+    dryMultiplier: body.dry_multiplier,
+    dryRange: body.dry_range,
+    drySequenceBreakers: body.dry_sequence_breakers,
   }
 
   if ('dynatemp' in body && !!body.dynatemp) {

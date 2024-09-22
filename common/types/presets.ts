@@ -102,6 +102,11 @@ export interface GenSettings {
   doSample?: boolean
   penaltyAlpha?: number
   numBeams?: number
+  dryMultiplier?: number
+  dryBase?: number
+  dryAllowedLength?: number
+  dryRange?: number
+  drySequenceBreakers?: string[]
 
   localRequests?: boolean
   addBosToken?: boolean
