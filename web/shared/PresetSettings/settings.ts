@@ -179,6 +179,11 @@ export const ADAPTER_SETTINGS: {
   penaltyAlpha: ['ooba'],
   earlyStopping: ['ooba'],
   numBeams: ['ooba'],
+  dryAllowedLength: ['koboldcpp', 'ooba', 'tabby'],
+  dryBase: ['koboldcpp', 'ooba', 'tabby'],
+  dryMultiplier: ['koboldcpp', 'ooba', 'tabby'],
+  dryRange: ['tabby'],
+  drySequenceBreakers: ['koboldcpp', 'ooba', 'tabby'],
 
   replicateModelName: ['replicate'],
   replicateModelVersion: ['replicate'],
