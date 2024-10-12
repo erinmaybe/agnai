@@ -1,4 +1,4 @@
-import { AIAdapter } from '../../common/adapters'
+import { AIAdapter, MODE_SETTINGS } from '../../common/adapters'
 import {
   mapPresetsToAdapter,
   defaultPresets,
@@ -16,13 +16,14 @@ import {
   buildPromptParts,
   resolveScenario,
   JsonField,
+  getContextLimit,
 } from '../../common/prompt'
 import { configure } from '../../common/horde-gen'
 import needle from 'needle'
 import { HORDE_GUEST_KEY } from '../api/horde'
 import { getTokenCounter } from '../tokenize'
 import { getAppConfig } from '../api/settings'
-import { getHandlers, getSubscriptionPreset, handlers } from './agnaistic'
+import { SubscriptionPreset, getHandlers, getSubscriptionPreset } from './agnaistic'
 import { deepClone, getSubscriptionModelLimits, parseStops, tryParse } from '/common/util'
 import { isDefaultTemplate, templates } from '/common/presets/templates'
 import {
@@ -341,12 +342,14 @@ export async function createChatStream(
   if (entities) {
     const { adapter, model } = getAdapter(opts.chat, entities.user, entities.gen)
     const encoder = getTokenCounter(adapter, model)
+    const nextSettings = simplifyPreset(opts.user, entities.gen, subscription)
+    opts.settings = nextSettings
     opts.parts = await buildPromptParts(
       {
         ...entities,
         sender: opts.sender,
         kind: opts.kind,
-        settings: entities.gen,
+        settings: nextSettings,
         chat: opts.chat,
         members: opts.members,
         replyAs: opts.replyAs,
@@ -381,7 +384,7 @@ export async function createChatStream(
 
   const { adapter, isThirdParty, model } = getAdapter(opts.chat, opts.user, opts.settings)
   const encoder = getTokenCounter(adapter, model, subscription?.preset)
-  const handler = handlers[adapter]
+  const handler = getHandlers(opts.settings)
 
   /**
    * Context limits set by the subscription need to be present before the prompt is finalised.
@@ -434,6 +437,7 @@ export async function createChatStream(
     subscription,
     encoder,
     jsonValues: opts.jsonValues,
+    contextSize: prompt.length,
   })
 
   return {
@@ -558,4 +562,33 @@ async function getGenerationSettings(
     ...getFallbackPreset(adapter),
     src: guest ? 'guest-fallback-last' : 'user-fallback-last',
   }
+}
+
+function simplifyPreset(
+  user: AppSchema.User,
+  gen: Partial<AppSchema.GenSettings>,
+  sub?: SubscriptionPreset
+): Partial<AppSchema.GenSettings> {
+  const next: Partial<AppSchema.GenSettings> = { ...gen }
+
+  if (gen.useMaxContext || gen.presetMode === 'simple') {
+    gen.useMaxContext = true
+    next.maxContextLength = getContextLimit(user, next) + (gen.maxTokens ?? 0)
+  }
+
+  if (!gen.presetMode || gen.presetMode === 'advanced') return next
+
+  const keep: any = {}
+
+  for (const [prop, usable] of Object.entries(MODE_SETTINGS[gen.presetMode] || {})) {
+    if (!usable) continue
+    const value = (gen as any)[prop]
+    if (value !== undefined) {
+      keep[prop] = value
+    }
+  }
+
+  Object.assign(next, sub?.preset || {}, keep, { useMaxContext: true })
+
+  return next
 }

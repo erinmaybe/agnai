@@ -126,6 +126,14 @@ export const deleteMistralKey = handle(async ({ userId }) => {
   return { success: true }
 })
 
+export const deleteFeatherlessKey = handle(async ({ userId }) => {
+  await store.users.updateUser(userId!, {
+    featherlessApiKey: '',
+  })
+
+  return { success: true }
+})
+
 export const deleteElevenLabsKey = handle(async ({ userId }) => {
   await store.users.updateUser(userId!, {
     elevenLabsApiKey: '',
@@ -160,6 +168,7 @@ const validConfig = {
   hordeWorkers: ['string'],
   oaiKey: 'string?',
   mistralKey: 'string?',
+  featherlessApiKey: 'string?',
   scaleUrl: 'string?',
   scaleApiKey: 'string?',
   claudeApiKey: 'string?',
@@ -170,6 +179,7 @@ const validConfig = {
   defaultPreset: 'string?',
   chargenPreset: 'string?',
   adapterConfig: 'any?',
+  disableLTM: 'boolean?',
 } as const
 
 /**
@@ -189,6 +199,8 @@ export const updatePartialConfig = handle(async ({ userId, body }) => {
       announcement: 'string?',
       defaultPreset: 'string?',
       chargenPreset: 'string?',
+      images: 'any?',
+      disableLTM: 'boolean?',
     },
     body
   )
@@ -201,6 +213,10 @@ export const updatePartialConfig = handle(async ({ userId, body }) => {
       throw new StatusError(`Invalid preset`, 403)
     }
     update.defaultPreset = body.defaultPreset
+  }
+
+  if (body.disableLTM !== undefined) {
+    update.disableLTM = body.disableLTM
   }
 
   if (body.chargenPreset) {
@@ -247,6 +263,10 @@ export const updatePartialConfig = handle(async ({ userId, body }) => {
     update.thirdPartyPassword = encryptText(body.thirdPartyPassword)
   }
 
+  if (body.images) {
+    update.images = body.images
+  }
+
   await store.users.updateUser(userId, update)
   const next = await getSafeUserConfig(userId)
   return next
@@ -265,6 +285,10 @@ export const updateConfig = handle(async ({ userId, body }) => {
     hordeUseTrusted: body.hordeUseTrusted ?? false,
     defaultPreset: body.defaultPreset || '',
     useLocalPipeline: body.useLocalPipeline,
+  }
+
+  if (body.disableLTM !== undefined) {
+    update.disableLTM = body.disableLTM
   }
 
   if (body.hordeKey || body.hordeApiKey) {
@@ -336,6 +360,10 @@ export const updateConfig = handle(async ({ userId, body }) => {
 
   if (body.mistralKey) {
     update.mistralKey = encryptText(body.mistralKey!)
+  }
+
+  if (body.featherlessApiKey) {
+    update.featherlessApiKey = encryptText(body.featherlessApiKey)
   }
 
   if (body.scaleUrl !== undefined) update.scaleUrl = body.scaleUrl

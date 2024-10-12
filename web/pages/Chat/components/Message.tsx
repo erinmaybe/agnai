@@ -80,6 +80,7 @@ type MessageProps = {
   textBeforeGenMore?: string
   voice?: VoiceState
   firstInserted?: boolean
+  index: number
 }
 
 const anonNames = new Map<string, number>()
@@ -316,6 +317,7 @@ const Message: Component<MessageProps> = (props) => {
                   }
                 >
                   <MessageOptions
+                    index={props.index}
                     ui={user.ui}
                     msg={props.msg}
                     edit={edit}
@@ -523,6 +525,7 @@ const JsonEdit: Component<{ msg: SplitMessage; update: (next: any) => void }> = 
 }
 
 const MessageOptions: Component<{
+  index: number
   msg: SplitMessage
   ui: UI.UISettings
   tts: boolean
@@ -535,7 +538,9 @@ const MessageOptions: Component<{
   onRemove: () => void
   showMore: Signal<boolean>
 }> = (props) => {
-  const showInner = createMemo(() => Object.values(props.ui.msgOptsInline || {}).some((v) => !!v))
+  const showInner = createMemo(() =>
+    Object.values(props.ui.msgOptsInline || {}).some((v) => !v?.outer)
+  )
 
   const closer = (action: () => void) => {
     return () => {
@@ -651,7 +656,11 @@ const MessageOptions: Component<{
         }}
       </For>
 
-      <div class="flex items-center" onClick={() => props.showMore[1](true)}>
+      <div
+        class="flex items-center"
+        classList={{ 'tour-message-opts': props.index === 0, hidden: !showInner() }}
+        onClick={() => props.showMore[1](true)}
+      >
         <MoreHorizontal class="icon-button" />
       </div>
 

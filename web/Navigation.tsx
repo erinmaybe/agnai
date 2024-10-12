@@ -7,6 +7,8 @@ import {
   ChevronRight,
   HeartHandshake,
   HelpCircle,
+  Image,
+  Info,
   LogIn,
   MailQuestion,
   Menu,
@@ -62,6 +64,7 @@ import { navStore } from './subnav'
 import { getRgbaFromVar } from './shared/colors'
 import { CallToAction } from './shared/CallToAction'
 import Button from './shared/Button'
+import { clearTours } from './tours'
 
 const Navigation: Component = () => {
   let parent: any
@@ -134,7 +137,7 @@ const Navigation: Component = () => {
     <>
       <Show when={!state.showMenu && dismissable()}>
         <div
-          class="icon-button absolute left-2 top-4 z-50 rounded-md px-2 py-2 "
+          class="icon-button absolute left-2 top-4 z-50 rounded-md px-2 py-2"
           style={{ background: getRgbaFromVar('bg-700', 0.3)?.background }}
           onClick={() => settingStore.menu(true)}
           classList={{ hidden: !isChat() }}
@@ -153,11 +156,8 @@ const Navigation: Component = () => {
         role="navigation"
         aria-label="Main"
       >
-        <div
-          ref={content}
-          class="drawer__content sm:text-md text-md flex flex-col gap-1 px-2 sm:gap-1"
-        >
-          <div class="flex w-full items-center justify-between">
+        <div ref={content} class="drawer__content sm:text-md text-md flex flex-col gap-1 sm:gap-1">
+          <div class="flex w-full items-center justify-between px-2">
             <div
               class="icon-button flex w-2/12 justify-start p-1"
               onClick={() => {
@@ -189,7 +189,7 @@ const Navigation: Component = () => {
             <div class="flex w-2/12 justify-end">
               <Switch>
                 <Match when={nav.body && subnav()}>
-                  <div class="icon-button" onClick={() => setSubnav(false)}>
+                  <div class="icon-button tour-main-menu" onClick={() => setSubnav(false)}>
                     <ChevronLeft />
                   </div>
                 </Match>
@@ -207,7 +207,7 @@ const Navigation: Component = () => {
               <Show when={nav.title}>
                 <div class="text-500 flex w-full justify-center text-xs">{nav.title}</div>
               </Show>
-              {nav.body}
+              <div class="flex flex-col gap-1 px-2">{nav.body}</div>
               <Slots />
             </Match>
             <Match when={user.loggedIn}>
@@ -262,71 +262,73 @@ const UserNavigation: Component = () => {
 
   return (
     <>
-      <UserProfile />
+      <div class="flex flex-col gap-1 px-2">
+        <UserProfile />
 
-      <Show when={menu.flags.chub}>
-        <Item href="/chub" ariaLabel="Character hub">
-          <ShoppingBag aria-hidden="true" />
-          CHUB
-        </Item>
-      </Show>
+        <Show when={menu.flags.chub}>
+          <Item href="/chub" ariaLabel="Character hub">
+            <ShoppingBag aria-hidden="true" />
+            CHUB
+          </Item>
+        </Show>
 
-      <CharacterLink />
+        <CharacterLink />
 
-      <ChatLink />
+        <ChatLink />
 
-      <Show when={guidance()}>
-        <Item href="/saga" ariaLabel="Sagas Preview">
-          <Wand2 aria-hidden="true" />
-          Sagas Preview
-        </Item>
-      </Show>
+        <Show when={guidance()}>
+          <Item href="/saga" ariaLabel="Sagas Preview">
+            <Wand2 aria-hidden="true" />
+            Sagas Preview
+          </Item>
+        </Show>
 
-      <Library />
-      <MultiItem>
-        <Item href="/presets" ariaLabel="Presets">
-          <Sliders aria-hidden="true" />
-          <span aria-hidden="true">Presets</span>
-        </Item>
-        <EndItem>
-          <A class="icon-button" href="/presets/new" role="button" aria-label="Add a new preset">
-            <Plus aria-hidden="true" />
-          </A>
-        </EndItem>
-      </MultiItem>
+        <Library />
+        <MultiItem>
+          <Item href="/presets" ariaLabel="Presets">
+            <Sliders aria-hidden="true" />
+            <span aria-hidden="true">Presets</span>
+          </Item>
+          <EndItem>
+            <A class="icon-button" href="/presets/new" role="button" aria-label="Add a new preset">
+              <Plus aria-hidden="true" />
+            </A>
+          </EndItem>
+        </MultiItem>
 
-      <Show when={menu.flags.sounds}>
-        <Sounds />
-      </Show>
+        <Show when={menu.flags.sounds}>
+          <Sounds />
+        </Show>
 
-      <Show when={user.user?.admin}>
-        <Item href="/admin/metrics" ariaLabel="Manage">
-          <Activity aria-hidden="true" />
-          <span aria-hidden="true">Manage</span>
-        </Item>
-        <SubMenu>
-          <SubItem href="/admin/configuration" parent="/" ariaLabel="Configuration">
-            Configuration
-          </SubItem>
-          <SubItem href="/admin/users" parent="/" ariaLabel="Users">
-            Users
-          </SubItem>
-          <SubItem href="/admin/subscriptions" parent="/" ariaLabel="Subscriptions">
-            Subscriptions
-          </SubItem>
-          <SubItem href="/admin/announcements" parent="/" ariaLabel="Announcements">
-            Announcements
-          </SubItem>
-        </SubMenu>
-      </Show>
+        <Show when={user.user?.admin}>
+          <Item href="/admin/metrics" ariaLabel="Manage">
+            <Activity aria-hidden="true" />
+            <span aria-hidden="true">Manage</span>
+          </Item>
+          <SubMenu>
+            <SubItem href="/admin/configuration" parent="/" ariaLabel="Configuration">
+              Configuration
+            </SubItem>
+            <SubItem href="/admin/users" parent="/" ariaLabel="Users">
+              Users
+            </SubItem>
+            <SubItem href="/admin/subscriptions" parent="/" ariaLabel="Subscriptions">
+              Subscriptions
+            </SubItem>
+            <SubItem href="/admin/announcements" parent="/" ariaLabel="Announcements">
+              Announcements
+            </SubItem>
+          </SubMenu>
+        </Show>
 
-      <NavIcons
-        supportEmail={menu.config.serverConfig?.supportEmail}
-        patreon={menu.config.patreon}
-        user={user}
-        showMenu={menu.showMenu}
-        mode={user.ui.mode}
-      />
+        <NavIcons
+          supportEmail={menu.config.serverConfig?.supportEmail}
+          patreon={menu.config.patreon}
+          user={user}
+          showMenu={menu.showMenu}
+          mode={user.ui.mode}
+        />
+      </div>
 
       <Slots />
     </>
@@ -344,59 +346,67 @@ const GuestNavigation: Component = () => {
 
   return (
     <>
-      <Show when={menu.config.canAuth}>
-        <Item
-          href="/login"
-          ariaLabel="Login to the application"
-          onClick={() => soundEmitter.emit('menu-item-clicked', 'login')}
-        >
-          <LogIn /> Login
-        </Item>
-      </Show>
-
-      <Show when={menu.guest}>
-        <UserProfile />
-
-        <CharacterLink />
-
-        <Show when={menu.flags.chub}>
-          <Item href="/chub" ariaLabel="Character hub">
-            <ShoppingBag aria-hidden="true" />
-            CHUB
-          </Item>
-        </Show>
-
-        <ChatLink />
-
-        <Library />
-
-        <MultiItem>
+      <div class="flex flex-col gap-1 px-2">
+        <Show when={menu.config.canAuth}>
           <Item
-            href="/presets"
-            ariaLabel="Presets"
-            onClick={() => soundEmitter.emit('menu-item-clicked', 'presets')}
+            href="/login"
+            ariaLabel="Login to the application"
+            onClick={() => soundEmitter.emit('menu-item-clicked', 'login')}
+            class="tour-register"
           >
-            <Sliders /> Presets
+            <LogIn /> Login
           </Item>
-          <EndItem>
-            <A class="icon-button" href="/presets/new" role="button" aria-label="Add a new preset">
-              <Plus aria-hidden="true" />
-            </A>
-          </EndItem>
-        </MultiItem>
-
-        <Show when={menu.flags.sounds}>
-          <Sounds />
         </Show>
-      </Show>
 
-      <NavIcons
-        supportEmail={menu.config.serverConfig?.supportEmail}
-        patreon={menu.config.patreon}
-        user={user}
-        showMenu={menu.showMenu}
-        mode={user.ui.mode}
-      />
+        <Show when={menu.guest}>
+          <UserProfile />
+
+          <CharacterLink />
+
+          <Show when={menu.flags.chub}>
+            <Item href="/chub" ariaLabel="Character hub">
+              <ShoppingBag aria-hidden="true" />
+              CHUB
+            </Item>
+          </Show>
+
+          <ChatLink />
+
+          <Library />
+
+          <MultiItem>
+            <Item
+              href="/presets"
+              ariaLabel="Presets"
+              onClick={() => soundEmitter.emit('menu-item-clicked', 'presets')}
+            >
+              <Sliders /> Presets
+            </Item>
+            <EndItem>
+              <A
+                class="icon-button"
+                href="/presets/new"
+                role="button"
+                aria-label="Add a new preset"
+              >
+                <Plus aria-hidden="true" />
+              </A>
+            </EndItem>
+          </MultiItem>
+
+          <Show when={menu.flags.sounds}>
+            <Sounds />
+          </Show>
+        </Show>
+
+        <NavIcons
+          supportEmail={menu.config.serverConfig?.supportEmail}
+          patreon={menu.config.patreon}
+          user={user}
+          showMenu={menu.showMenu}
+          mode={user.ui.mode}
+        />
+      </div>
 
       <Slots />
     </>
@@ -440,6 +450,14 @@ const NavIcons: Component<{
 
         <Item onClick={() => settingStore.modal(true)} ariaLabel="Open settings page">
           <Settings aria-hidden="true" />
+        </Item>
+
+        <Item
+          onClick={() => settingStore.imageSettings(true)}
+          ariaLabel="Image Settings"
+          tooltip="Image Settings"
+        >
+          <Image aria-hidden="true" />
         </Item>
 
         <Item
@@ -495,14 +513,28 @@ const NavIcons: Component<{
             <DiscordDarkIcon />
           </Show>
         </ExternalLink>
+
+        <Item
+          onClick={() => {
+            clearTours()
+            window.location.href = location.origin
+          }}
+        >
+          <Tooltip tip="Show Welcome Tours" position="top">
+            <Info />
+          </Tooltip>
+        </Item>
       </div>
     </>
   )
 }
 
-function onItemClick(onClick?: () => void) {
+function onItemClick(onClick?: () => void, menuOpen?: boolean) {
   return () => {
     onClick?.()
+
+    if (menuOpen) return
+
     const { showMenu } = settingStore.getState()
     if (showMenu) settingStore.closeMenu()
   }
@@ -515,19 +547,26 @@ const Item: Component<{
   class?: string
   onClick?: () => void
   tooltip?: string
+  menuOpen?: boolean
+  tipClass?: string
 }> = (props) => {
   return (
-    <Tooltip position="top" tip={props.tooltip}>
+    <Tooltip
+      position="top"
+      tip={props.tooltip}
+      class="flex items-center"
+      classList={{ 'min-h-[2.25rem]': !props.class?.includes('h-') }}
+    >
       <Show when={!props.href}>
         <div
-          class={`flex cursor-pointer items-center justify-start gap-4 rounded-lg px-2 hover:bg-[var(--bg-700)] ${
+          class={`flex h-full cursor-pointer items-center justify-start gap-4 rounded-lg px-2 hover:bg-[var(--bg-700)] ${
             props.class || ''
           }`}
           classList={{
             'gap-4': !props.class?.includes('gap-'),
             'min-h-[2.25rem]': !props.class?.includes('h-'),
           }}
-          onClick={onItemClick(props.onClick)}
+          onClick={onItemClick(props.onClick, props.menuOpen)}
           tabindex={0}
           role="button"
           aria-label={props.ariaLabel}
@@ -538,13 +577,13 @@ const Item: Component<{
       <Show when={props.href}>
         <A
           href={props.href!}
-          class={`flex items-center justify-start gap-4 rounded-lg px-2 hover:bg-[var(--bg-700)] ${
+          class={`flex h-full items-center justify-start gap-4 rounded-lg px-2 hover:bg-[var(--bg-700)] ${
             props.class || ''
           }`}
           classList={{
             'min-h-[2.25rem]': !props.class?.includes('h-'),
           }}
-          onClick={onItemClick(props.onClick)}
+          onClick={onItemClick(props.onClick, props.menuOpen)}
           role="button"
           aria-label={props.ariaLabel}
         >
@@ -647,6 +686,7 @@ const CharacterLink = () => {
         href="/character/list"
         ariaLabel="Characters"
         onClick={() => soundEmitter.emit('menu-item-clicked', 'characters')}
+        class="tour-character"
       >
         <WizardIcon aria-hidden="true" />
         <span aria-hidden="true"> Characters </span>
@@ -688,7 +728,7 @@ export const UserProfile = () => {
   return (
     <>
       <div
-        class="grid w-full items-center justify-between gap-2"
+        class="tour-user-profile grid w-full items-center justify-between gap-2"
         style={{
           'grid-template-columns': '1fr max-content',
         }}
@@ -746,9 +786,12 @@ const MultiItem: Component<{ children: any }> = (props) => {
   )
 }
 
-const DoubleItem: Component<{ children: any }> = (props) => {
+const DoubleItem: Component<{ children: any; class?: string }> = (props) => {
   return (
-    <div class="grid w-full gap-2" style={{ 'grid-template-columns': '1fr 1fr' }}>
+    <div
+      class={`grid w-full gap-2 ${props.class || ''}`}
+      style={{ 'grid-template-columns': '1fr 1fr' }}
+    >
       {props.children}
     </div>
   )

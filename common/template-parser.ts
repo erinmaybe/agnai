@@ -6,6 +6,50 @@ import peggy from 'peggy'
 import { elapsedSince } from './util'
 import { v4 } from 'uuid'
 
+type Section = 'system' | 'history' | 'post'
+
+export type TemplateOpts = {
+  continue?: boolean
+  parts?: Partial<PromptParts>
+  chat: AppSchema.Chat
+
+  isPart?: boolean
+  isFinal?: boolean
+
+  char: AppSchema.Character
+  replyAs?: AppSchema.Character
+  impersonate?: AppSchema.Character
+  sender: AppSchema.Profile
+
+  lines?: string[]
+  characters?: Record<string, AppSchema.Character>
+  lastMessage?: string
+
+  chatEmbed?: Memory.UserEmbed<{ name: string }>[]
+  userEmbed?: Memory.UserEmbed[]
+
+  /** If present, history will be rendered last */
+  limit?: {
+    context: number
+    encoder: TokenCounter
+    output?: Record<string, { src: string; lines: string[] }>
+  }
+
+  sections?: {
+    flags: { [key in Section]?: boolean }
+    sections: { [key in Section]: string[] }
+  }
+
+  /**
+   * Only allow repeatable placeholders. Excludes iterators, conditions, and prompt parts.
+   */
+  repeatable?: boolean
+  inserts?: Map<number, string>
+  lowpriority?: Array<{ id: string; content: string }>
+
+  jsonValues: Record<string, any> | undefined
+}
+
 const parser = loadParser()
 
 function loadParser() {
@@ -62,6 +106,21 @@ type HolderDefinition =
     }
   | { value: Holder }
 
+const SAFE_PART_HOLDERS: { [key in Holder | 'roll']?: boolean } = {
+  char: true,
+  user: true,
+  chat_age: true,
+  value: true,
+  idle_duration: true,
+  random: true,
+  roll: true,
+}
+
+const FINAL_IGNORE_HOLDERS: { [key in Holder | 'roll']?: boolean } = {
+  system_prompt: true,
+  ujb: true,
+}
+
 type Holder =
   | 'char'
   | 'user'
@@ -103,40 +162,6 @@ type ChatEmbedProp = 'i' | 'name' | 'text'
 type HistoryProp = 'i' | 'message' | 'dialogue' | 'name' | 'isuser' | 'isbot'
 type BotsProp = 'i' | 'personality' | 'name'
 
-export type TemplateOpts = {
-  continue?: boolean
-  parts?: Partial<PromptParts>
-  chat: AppSchema.Chat
-
-  char: AppSchema.Character
-  replyAs?: AppSchema.Character
-  impersonate?: AppSchema.Character
-  sender: AppSchema.Profile
-
-  lines?: string[]
-  characters?: Record<string, AppSchema.Character>
-  lastMessage?: string
-
-  chatEmbed?: Memory.UserEmbed<{ name: string }>[]
-  userEmbed?: Memory.UserEmbed[]
-
-  /** If present, history will be rendered last */
-  limit?: {
-    context: number
-    encoder: TokenCounter
-    output?: Record<string, { src: string; lines: string[] }>
-  }
-
-  /**
-   * Only allow repeatable placeholders. Excludes iterators, conditions, and prompt parts.
-   */
-  repeatable?: boolean
-  inserts?: Map<number, string>
-  lowpriority?: Array<{ id: string; content: string }>
-
-  jsonValues: Record<string, any> | undefined
-}
-
 /**
  * This function also returns inserts because Chat and Claude discard the
  * parsed string and use the inserts for their own prompt builders
@@ -150,19 +175,31 @@ export async function parseTemplate(
   length?: number
   linesAddedCount: number
   history?: string[]
+  sections: NonNullable<TemplateOpts['sections']>
 }> {
   if (opts.limit) {
     opts.limit.output = {}
   }
 
+  const sections: TemplateOpts['sections'] = {
+    flags: {},
+    sections: { system: [], history: [], post: [] },
+  }
+
+  opts.sections = sections
+
   const parts = opts.parts || {}
 
   if (parts.systemPrompt) {
+    opts.isPart = true
     parts.systemPrompt = render(parts.systemPrompt, opts)
+    opts.isPart = false
   }
 
   if (parts.ujb) {
+    opts.isPart = true
     parts.ujb = render(parts.ujb, opts)
+    opts.isPart = false
   }
 
   const ast = parser.parse(template, {}) as PNode[]
@@ -182,6 +219,7 @@ export async function parseTemplate(
   // }
 
   /** Replace iterators */
+  let history: string[] = []
   if (opts.limit && opts.limit.output) {
     for (const [id, { lines, src }] of Object.entries(opts.limit.output)) {
       src
@@ -197,6 +235,7 @@ export async function parseTemplate(
       const trimmed = filled.adding.slice().reverse()
       output = output.replace(id, trimmed.join('\n'))
       linesAddedCount += filled.linesAddedCount
+      history = trimmed
     }
 
     // Adding the low priority blocks if we still have the budget for them,
@@ -214,12 +253,29 @@ export async function parseTemplate(
     }
   }
 
+  opts.isFinal = true
   const result = render(output, opts).replace(/\r\n/g, '\n').replace(/\n\n+/g, '\n\n').trim()
+  opts.isFinal = false
+
+  sections.sections.history = history
+
+  // console.log(
+  //   '@System Prompt\n',
+  //   sections.sections.system.join(''),
+  //   '\n@Definitions\n',
+  //   sections.sections.def.join(''),
+  //   '\n@History\n',
+  //   sections.sections.history.join(''),
+  //   '\n@Post\n',
+  //   sections.sections.post.join('')
+  // )
+
   return {
     parsed: result,
     inserts: opts.inserts ?? new Map(),
     length: await opts.limit?.encoder?.(result),
     linesAddedCount,
+    sections,
   }
 }
 
@@ -283,6 +339,9 @@ function render(template: string, opts: TemplateOpts, existingAst?: PNode[]) {
 
       const result = renderNode(parent, opts)
 
+      const marker = getMarker(parent)
+      fillSection(opts, marker, result)
+
       if (result) output.push(result)
     }
     return output.join('').replace(/\n\n+/g, '\n\n')
@@ -308,17 +367,24 @@ function renderNode(node: PNode, opts: TemplateOpts, conditionText?: string) {
 
   switch (node.kind) {
     case 'placeholder': {
-      return getPlaceholder(node, opts, conditionText)
+      const result = getPlaceholder(node, opts, conditionText)
+      return result
     }
 
-    case 'each':
-      return renderIterator(node.value, node.children, opts)
+    case 'each': {
+      const result = renderIterator(node.value, node.children, opts)
+      return result
+    }
 
-    case 'if':
-      return renderCondition(node, node.children, opts)
+    case 'if': {
+      const result = renderCondition(node, node.children, opts)
+      return result
+    }
 
-    case 'lowpriority':
-      return renderLowPriority(node, opts)
+    case 'lowpriority': {
+      const result = renderLowPriority(node, opts)
+      return result
+    }
   }
 }
 
@@ -338,7 +404,8 @@ function renderLowPriority(node: LowPriorityNode, opts: TemplateOpts) {
     const result = renderNode(child, opts)
     if (result) output.push(result)
   }
-  opts.lowpriority = opts.lowpriority ?? []
+
+  opts.lowpriority ??= []
   const lowpriorityBlockId = '__' + v4() + '__'
   opts.lowpriority.push({ id: lowpriorityBlockId, content: output.join('') })
   return lowpriorityBlockId
@@ -348,6 +415,21 @@ function renderProp(node: CNode, opts: TemplateOpts, entity: unknown, i: number)
   if (typeof node === 'string') return node
 
   switch (node.kind) {
+    case 'placeholder': {
+      switch (node.value) {
+        case 'char':
+        case 'user':
+        case 'json':
+        case 'random':
+        case 'roll':
+        case 'idle_duration':
+          return getPlaceholder(node, opts)
+
+        default:
+          return
+      }
+    }
+
     case 'bot-if':
     case 'bot-prop': {
       const bot = entity as AppSchema.Character
@@ -450,7 +532,10 @@ function renderCondition(
   const output: string[] = []
   for (const child of children) {
     if (typeof child !== 'string' && child.kind === 'else') continue
+    const isPart = opts.isPart
+    opts.isPart = false
     const result = renderNode(child, opts, value)
+    opts.isPart = isPart
     if (result) output.push(result)
   }
 
@@ -565,6 +650,14 @@ function getPlaceholder(
   if (node.value.startsWith('json.')) {
     const name = node.value.slice(5)
     return opts.jsonValues?.[name] || ''
+  }
+
+  if (opts.isPart && !SAFE_PART_HOLDERS[node.value]) {
+    return `{{${node.value}}}`
+  }
+
+  if (opts.isFinal && FINAL_IGNORE_HOLDERS[node.value]) {
+    return `{{${node.value}}}`
   }
 
   switch (node.value) {
@@ -685,4 +778,48 @@ function handleDice(node: DiceExpr) {
 
   const rand = usable.reduce((p, c) => p + c, 0) + adjust
   return rand
+}
+
+function fillSection(opts: TemplateOpts, marker: Section | undefined, result: string | undefined) {
+  if (!opts.sections) return
+  if (!result) return
+  if (result === HISTORY_MARKER) return
+
+  const flags = opts.sections.flags
+  const sections = opts.sections.sections
+
+  if (!flags.system) {
+    sections.system.push(result)
+    return
+  }
+
+  if (marker === 'history') {
+    flags.system = true
+    flags.history = true
+    return
+  }
+
+  sections.post.push(result)
+}
+
+function getMarker(node: PNode): Section | undefined {
+  if (typeof node === 'string') return
+
+  switch (node.kind) {
+    case 'placeholder': {
+      if (node.value === 'history') return 'history'
+      if (node.value === 'system_prompt') return 'system'
+      return
+    }
+
+    case 'each':
+      if (node.value === 'history') return 'history'
+      return
+
+    case 'if':
+      if (node.value === 'system_prompt') return 'system'
+      return
+  }
+
+  return
 }

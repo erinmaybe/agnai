@@ -347,7 +347,6 @@ function getBasePayload(opts: PayloadOpts, stops: string[] = []) {
       dynatemp_range: gen.dynatemp_range,
       dynatemp_exponent: gen.dynatemp_exponent,
       smoothing_factor: gen.smoothingFactor,
-      trim_stop: gen.trimStop,
       rep_pen_range: gen.repetitionPenaltyRange,
       rep_pen_slope: gen.repetitionPenaltySlope,
       dry_allowed_length: gen.dryAllowedLength,

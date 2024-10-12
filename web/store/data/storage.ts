@@ -81,6 +81,7 @@ const fallbacks: { [key in StorageKey]: LocalStorage[key] } = {
   presets: [],
   config: {
     _id: 'anon',
+    disableLTM: true,
     admin: false,
     hash: '',
     kind: 'user',
@@ -191,6 +192,13 @@ async function getGuestInitEntities(config?: AppSchema.AppConfig) {
         name: 'My Preset',
         kind: 'gen-setting',
         userId: 'anon',
+        presetMode: 'simple',
+        useMaxContext: true,
+        temp: 0.75,
+        maxContextLength: 8 * 1024,
+        maxTokens: 350,
+        minP: 0.05,
+        useAdvancedPrompt: 'basic',
         registered: {
           agnaistic: {
             subscriptionId: model._id,

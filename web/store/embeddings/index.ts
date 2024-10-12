@@ -7,6 +7,8 @@ import { slugify } from '/common/util'
 import { toastStore } from '../toasts'
 import { docCache } from './cache'
 import type { MemoryState } from '../memory'
+import type { Tiktoken } from 'js-tiktoken'
+import { getStore } from '../create'
 
 type Callback = () => void
 type QueryResult = Extract<WorkerResponse, { type: 'result' }>
@@ -60,6 +62,9 @@ export const embedApi = {
     const embeds = ids.map((id) => ({ id, state: 'not-loaded' }))
     setter({ embeds })
   },
+  initSimiliary: () => {
+    post('initSimilarity', { model: models.embedding })
+  },
   encode,
   decode,
   embedChat,
@@ -105,11 +110,16 @@ const handlers: {
     decodeCallbacks.delete(msg.id)
   },
   init: (type) => {
+    const user = getStore('user').getState()
+    const disableLTM = user.user?.disableLTM ?? true
     if (type === 'embed') {
+      if (disableLTM) return
       post('initSimilarity', { model: models.embedding })
     }
 
     if (type === 'image' && window.flags.caption) {
+      const httpCaptioning = models.captioning.startsWith('http')
+      if (disableLTM && !httpCaptioning) return
       post('initCaptioning', { model: models.captioning })
     }
   },
@@ -262,12 +272,23 @@ async function query(chatId: string, text: string): Promise<QueryResult> {
 
 const TOKENIZE_LIMIT = 25
 
+let encoder: Tiktoken
+
+async function getEncoder() {
+  if (encoder) return encoder
+
+  const mod = await import('js-tiktoken').then((mod) => mod.getEncoding)
+  encoder = mod('cl100k_base')
+  return encoder
+}
+
 async function encode(text: string): Promise<number[]> {
   const id = v4()
   return new Promise<number[]>((resolve) => {
     const start = Date.now()
     const timer = setTimeout(async () => {
-      const result = await import('gpt-3-encoder').then((mod) => mod.encode(text))
+      const encoder = await getEncoder()
+      const result = encoder.encode(text)
       resolve(result)
     }, TOKENIZE_LIMIT)
     const resolver = (tokens: number[]) => {
@@ -283,7 +304,8 @@ async function decode(tokens: number[]): Promise<string> {
   const id = v4()
   return new Promise<string>((resolve) => {
     const timer = setTimeout(async () => {
-      const result = await import('gpt-3-encoder').then((mod) => mod.decode(tokens))
+      const encoder = await getEncoder()
+      const result = encoder.decode(tokens)
       resolve(result)
     }, TOKENIZE_LIMIT)
     const resolver = (text: string) => {

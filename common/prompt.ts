@@ -1,6 +1,12 @@
 import type { GenerateRequestV2 } from '../srv/adapter/type'
 import type { AppSchema, TokenCounter } from './types'
-import { AIAdapter, NOVEL_MODELS, OPENAI_CONTEXTS, THIRDPARTY_HANDLERS } from './adapters'
+import {
+  AIAdapter,
+  GOOGLE_LIMITS,
+  NOVEL_MODELS,
+  OPENAI_CONTEXTS,
+  THIRDPARTY_HANDLERS,
+} from './adapters'
 import { formatCharacter } from './characters'
 import { defaultTemplate } from './mode-templates'
 import { buildMemoryPrompt } from './memory'
@@ -8,7 +14,7 @@ import { defaultPresets, getFallbackPreset, isDefaultPreset } from './presets'
 import { parseTemplate } from './template-parser'
 import { getMessageAuthor, getBotName, trimSentence, neat } from './util'
 import { Memory } from './types'
-import { promptOrderToTemplate } from './prompt-order'
+import { promptOrderToTemplate, SIMPLE_ORDER } from './prompt-order'
 import { ModelFormat, replaceTags } from './presets/templates'
 
 export type TickHandler<T = any> = (response: string, state: InferenceState, json?: T) => void
@@ -239,7 +245,7 @@ export async function createPromptParts(opts: PromptOpts, encoder: TokenCounter)
    * The queryable embeddings are messages that are _NOT_ included in the context
    */
   const maxContext = opts.settings
-    ? opts.settings.maxContextLength! - templateSize - opts.settings.maxTokens!
+    ? getContextLimit(opts.user, opts.settings) - templateSize - opts.settings.maxTokens!
     : undefined
   const lines = await getLinesForPrompt(opts, encoder, maxContext)
   const parts = await buildPromptParts(opts, lines, encoder)
@@ -290,16 +296,16 @@ export async function assemblePrompt(
 
 export function getTemplate(opts: Pick<GenerateRequestV2, 'settings' | 'chat'>) {
   const fallback = getFallbackPreset(opts.settings?.service!)
-  if (
-    opts.settings?.useAdvancedPrompt === 'basic' &&
-    opts.settings.promptOrderFormat &&
-    opts.settings.promptOrder
-  ) {
-    const template = promptOrderToTemplate(
-      opts.settings.promptOrderFormat,
-      opts.settings.promptOrder
-    )
-    return template
+  if (opts.settings?.useAdvancedPrompt === 'basic' || opts.settings?.presetMode === 'simple') {
+    if (opts.settings.presetMode === 'simple') {
+      const template = promptOrderToTemplate('Universal', SIMPLE_ORDER)
+      return template
+    }
+
+    if (opts.settings.modelFormat && opts.settings.promptOrder) {
+      const template = promptOrderToTemplate(opts.settings.modelFormat, opts.settings.promptOrder)
+      return template
+    }
   }
 
   const template = opts.settings?.gaslight || fallback?.gaslight || defaultTemplate
@@ -352,8 +358,6 @@ export async function injectPlaceholders(template: string, inject: InjectOpts) {
     hist.lines = next
   }
 
-  const { adapter, model } = getAdapter(opts.chat, opts.user, opts.settings)
-
   const lines = !hist
     ? []
     : hist.order === 'desc'
@@ -368,7 +372,7 @@ export async function injectPlaceholders(template: string, inject: InjectOpts) {
     lines,
     ...rest,
     limit: {
-      context: getContextLimit(opts.settings, adapter, model),
+      context: getContextLimit(opts.user, opts.settings),
       encoder,
     },
   })
@@ -609,8 +613,7 @@ export async function getLinesForPrompt(
   encoder: TokenCounter,
   maxContext?: number
 ) {
-  const { adapter, model } = getAdapter(opts.chat, opts.user, settings)
-  maxContext = maxContext || getContextLimit(settings, adapter, model)
+  maxContext = maxContext || getContextLimit(opts.user, settings)
 
   const profiles = new Map<string, AppSchema.Profile>()
   for (const member of members) {
@@ -807,16 +810,16 @@ export function getChatPreset(
  */
 export function getAdapter(
   chat: AppSchema.Chat,
-  config: AppSchema.User,
+  user: AppSchema.User,
   preset: Partial<AppSchema.GenSettings> | undefined
 ) {
   let adapter = preset?.service!
 
-  const thirdPartyFormat = preset?.thirdPartyFormat || config.thirdPartyFormat
+  const thirdPartyFormat = preset?.thirdPartyFormat || user.thirdPartyFormat
   const isThirdParty = thirdPartyFormat in THIRDPARTY_HANDLERS && adapter === 'kobold'
 
   if (adapter === 'kobold') {
-    adapter = THIRDPARTY_HANDLERS[config.thirdPartyFormat]
+    adapter = THIRDPARTY_HANDLERS[user.thirdPartyFormat]
   }
 
   let model = ''
@@ -827,7 +830,7 @@ export function getAdapter(
   }
 
   if (adapter === 'novel') {
-    model = config.novelModel
+    model = user.novelModel
   }
 
   if (adapter === 'openai') {
@@ -840,16 +843,26 @@ export function getAdapter(
     } else presetName = 'User Preset'
   } else if (chat.genSettings) {
     presetName = 'Chat Settings'
-  } else if (config.defaultPresets) {
-    const servicePreset = config.defaultPresets[adapter]
+  } else if (user.defaultPresets) {
+    const servicePreset = user.defaultPresets[adapter]
     if (servicePreset) {
       presetName = `Service Preset`
     }
   }
 
-  const contextLimit = getContextLimit(preset, adapter, model)
+  const contextLimit = getContextLimit(user, preset)
 
   return { adapter, model, preset: presetName, contextLimit, isThirdParty }
+}
+
+type LimitStrategy = (
+  user: AppSchema.User,
+  gen: Partial<AppSchema.GenSettings> | undefined
+) => { context: number; tokens: number } | void
+
+let _strategy: LimitStrategy = () => {}
+export function setContextLimitStrategy(strategy: LimitStrategy) {
+  _strategy = strategy
 }
 
 /**
@@ -857,29 +870,47 @@ export function getAdapter(
  */
 
 export function getContextLimit(
-  gen: Partial<AppSchema.GenSettings> | undefined,
-  adapter: AIAdapter,
-  model: string
+  user: AppSchema.User,
+  gen: Partial<AppSchema.GenSettings> | undefined
 ): number {
+  const genAmount = gen?.maxTokens || getFallbackPreset(gen?.service || 'horde')?.maxTokens || 80
   const configuredMax =
-    gen?.maxContextLength || getFallbackPreset(adapter)?.maxContextLength || 2048
+    gen?.maxContextLength || getFallbackPreset(gen?.service || 'horde')?.maxContextLength || 4096
 
-  const genAmount = gen?.maxTokens || getFallbackPreset(adapter)?.maxTokens || 80
+  if (!gen?.service) return configuredMax - genAmount
 
-  if (gen?.service === 'kobold' || gen?.service === 'ooba') return configuredMax - genAmount
+  switch (gen.service) {
+    case 'agnaistic': {
+      const stratMax = _strategy(user, gen)
+      if (gen?.useMaxContext && stratMax) {
+        return stratMax.context - genAmount
+      }
 
-  switch (adapter) {
-    case 'agnaistic':
-      return configuredMax - genAmount
+      const max = Math.min(configuredMax, stratMax?.context ?? configuredMax)
+      return max - genAmount
+    }
 
     // Any LLM could be used here so don't max any assumptions
-    case 'petals':
-    case 'kobold':
-    case 'horde':
     case 'ooba':
+    case 'petals':
+    case 'horde':
       return configuredMax - genAmount
 
+    case 'kobold': {
+      if (!gen.useMaxContext) return configuredMax - genAmount
+      switch (gen.thirdPartyFormat) {
+        case 'gemini': {
+          const max = GOOGLE_LIMITS[gen.googleModel!]
+          return max ? max - genAmount : configuredMax - genAmount
+        }
+
+        default:
+          return configuredMax - genAmount
+      }
+    }
+
     case 'novel': {
+      const model = gen?.novelModel || NOVEL_MODELS.kayra_v1
       if (model === NOVEL_MODELS.clio_v1 || model === NOVEL_MODELS.kayra_v1) {
         return Math.min(8000, configuredMax) - genAmount
       }
@@ -888,6 +919,7 @@ export function getContextLimit(
     }
 
     case 'openai': {
+      const model = (gen?.service === 'openai' ? gen?.oaiModel! : gen?.thirdPartyModel) || ''
       const limit = OPENAI_CONTEXTS[model] || 128000
       return Math.min(configuredMax, limit) - genAmount
     }
@@ -906,6 +938,8 @@ export function getContextLimit(
 
     case 'openrouter':
       if (gen?.openRouterModel) {
+        if (gen.useMaxContext) return gen.openRouterModel.context_length - genAmount
+
         return Math.min(gen.openRouterModel.context_length, configuredMax) - genAmount
       }
 
@@ -1061,7 +1095,7 @@ export function toJsonSchema(body: JsonField[]): JsonSchema | undefined {
       props[name].type = 'enum'
 
       // @ts-ignore
-      props[key].enum = ['true', 'false', 'yes', 'no']
+      props[name].enum = ['true', 'false', 'yes', 'no']
     }
     schema.required.push(name)
   }

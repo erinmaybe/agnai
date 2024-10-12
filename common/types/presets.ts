@@ -1,6 +1,6 @@
 import { AIAdapter, OpenRouterModel, ThirdPartyFormat } from '../adapters'
 import { ModelFormat } from '../presets/templates'
-import { BaseImageSettings } from './image-schema'
+import { BaseImageSettings, ImageSettings } from './image-schema'
 import { ResponseSchema } from './library'
 
 export interface SubscriptionTier {
@@ -76,6 +76,7 @@ export interface UserGenPreset extends GenSettings {
 export interface GenSettings {
   name: string
   description?: string
+  presetMode?: 'simple' | 'advanced'
 
   service?: AIAdapter
 
@@ -87,6 +88,7 @@ export interface GenSettings {
   smoothingCurve?: number
   maxTokens: number
   maxContextLength?: number
+  useMaxContext?: boolean
   repetitionPenalty: number
   repetitionPenaltyRange: number
   repetitionPenaltySlope: number
@@ -153,6 +155,8 @@ export interface GenSettings {
   claudeModel?: string
   mistralModel?: string
   openRouterModel?: OpenRouterModel
+  googleModel?: string
+  featherlessModel?: string
 
   thirdPartyUrl?: string
   thirdPartyFormat?: ThirdPartyFormat
@@ -197,4 +201,12 @@ export interface PromptTemplate {
   public?: boolean
   createdAt: string
   updatedAt: string
+}
+
+export interface ImagePreset extends ImageSettings {
+  kind: 'image-preset'
+  _id: string
+  userId: string
+  name: string
+  description: string
 }

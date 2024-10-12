@@ -1,4 +1,3 @@
-import { decode, encode } from 'gpt-3-encoder'
 import { pipeline, Pipeline, env, RawImage } from '@xenova/transformers'
 import {
   EmbedDocument,
@@ -8,9 +7,12 @@ import {
   WorkerResponse,
 } from './types'
 import { docCache } from './cache'
+import { getEncoding } from 'js-tiktoken'
 
 // @ts-ignore
 env.allowLocalModels = false
+
+const encoder = getEncoding('cl100k_base')
 
 type TextEmbed = { msg: string; entityId: string; embed: Tensor; meta: any }
 type RankedMsg = { msg: string; entityId: string; similarity: number; meta: any }
@@ -23,6 +25,8 @@ type Embeddings = {
 // let Tokenizer: PreTrainedTokenizer
 let Embedder: Pipeline
 let Captioner: Pipeline
+let EMBED_INITED = false
+let CAPTION_INITED = false
 let HttpCaptioner: (base64: string) => Promise<any>
 
 const embeddings: Embeddings = {}
@@ -32,14 +36,19 @@ const handlers: {
   [key in WorkerRequest['type']]: (msg: Extract<WorkerRequest, { type: key }>) => Promise<void>
 } = {
   encode: async (msg) => {
-    const result = encode(msg.text)
+    const result = encoder.encode(msg.text)
     post('encoding', { id: msg.id, tokens: result })
   },
   decode: async (msg) => {
-    const result = decode(msg.tokens)
+    const result = encoder.decode(msg.tokens)
     post('decoding', { id: msg.id, text: result })
   },
   initSimilarity: async (msg) => {
+    if (EMBED_INITED) {
+      console.log('[embed] already inited')
+      return
+    }
+    EMBED_INITED = true
     Embedder = await pipeline('feature-extraction', msg.model, {
       // quantized: true,
       progress_callback: (data: { status: string; file: string; progress: number }) => {
@@ -50,6 +59,11 @@ const handlers: {
     post('embedLoaded', {})
   },
   initCaptioning: async (msg) => {
+    if (CAPTION_INITED) {
+      return
+    }
+
+    CAPTION_INITED = true
     console.log(`[caption] loading`)
 
     if (msg.model.startsWith('http')) {
@@ -75,6 +89,8 @@ const handlers: {
     post('captionLoaded', {})
   },
   captionImage: async (msg) => {
+    if (!CAPTION_INITED && !HttpCaptioner) return
+
     const base64 = msg.image.includes(',') ? msg.image.split(',')[1] : msg.image
 
     if (HttpCaptioner) {
@@ -102,6 +118,7 @@ const handlers: {
     }
   },
   embedChat: async (msg) => {
+    if (!EMBED_INITED) return
     if (!Embedder) return
     if (!embeddings[msg.chatId]) {
       embeddings[msg.chatId] = {}
@@ -198,6 +215,8 @@ const embedQueue: Array<RequestChatEmbed | RequestDocEmbed> = []
 
 let EMBEDDING = false
 async function embed(msg: RequestChatEmbed | RequestDocEmbed) {
+  if (!EMBED_INITED) return
+
   const type = msg.type === 'embedChat' ? 'chat' : 'document'
   const id = msg.type === 'embedChat' ? msg.chatId : msg.documentId
   if (EMBEDDING) {

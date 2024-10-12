@@ -100,9 +100,13 @@ export function useRef<T = HTMLElement>() {
   return [ref, onRef] as const
 }
 
-export function isChatPage() {
+export function isChatPage(noSaga?: boolean) {
   const location = useLocation()
   const isChat = createMemo(() => {
+    if (noSaga) {
+      return location.pathname.startsWith('/chat/')
+    }
+
     return location.pathname.startsWith('/chat/') || location.pathname.startsWith('/saga/')
   })
 
@@ -136,7 +140,7 @@ export function useCharacterBg(src: 'layout' | 'page') {
     if (!isChat || !isBg || !char || char.visualType === 'sprite' || !char.avatar) {
       return {
         ...base,
-        'background-image': `url(${state.background})`,
+        'background-image': state.background ? `url(${state.background})` : undefined,
         'background-size': 'cover',
       }
     }

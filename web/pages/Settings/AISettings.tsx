@@ -28,6 +28,7 @@ import TextInput from '/web/shared/TextInput'
 import Button from '/web/shared/Button'
 import { neat } from '/common/util'
 import { HelpModal } from '/web/shared/Modal'
+import { Toggle } from '/web/shared/Toggle'
 
 const AISettings: Component<{
   onHordeWorkersChange: (workers: string[]) => void
@@ -115,6 +116,14 @@ const AISettings: Component<{
       </Show>
 
       <Show when={ready()}>
+        <Toggle
+          fieldName="enableLTM"
+          value={!(state.user?.disableLTM ?? true)}
+          label="Enable Embeddings/Long-Term Memory"
+          helperMarkdown={`Improves site performance when disabled. Disable long-term memory if your chat is _laggy_ and unresponsive.
+            `}
+        />
+
         <Show when={!canUseApi()}>
           <PresetSelect
             fieldName="defaultPreset"
@@ -132,7 +141,7 @@ const AISettings: Component<{
               title="Agnaistic API Access"
               cta={
                 <div>
-                  <a class="link">How use to API Access</a>
+                  <a class="link">How to use API Access</a>
                 </div>
               }
               markdown={ApiAccessHelp}
@@ -248,11 +257,14 @@ const AISettings: Component<{
 export default AISettings
 
 const ApiAccessHelp = neat`
-  The subscriber API endpoint uses the *OpenAI Text Completion* format.
+  The subscriber API endpoint uses the *OpenAI Text Completion* or *OpenAI Chat Completion* format.
 
+  The full URL for these endpoints are:
+  - https://api.agnai.chat/v1/completions
+  - https://api.agnai.chat/v1/chat/completions
+
+  **Instructions**:
   1. Select your \`API Access Preset\`: This preset will be used for your API calls. Change this on your settings page.
   2. Generate your API Key.
   3. Use the API URL \`https://api.agnai.chat\` and your generated API key.
-
-  *SillyTavern*: Use _Ooba_ as the backend
 `

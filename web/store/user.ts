@@ -22,6 +22,7 @@ import {
   setRootVariable,
 } from '../shared/colors'
 import { UserType } from '/common/types/admin'
+import { embedApi } from './embeddings'
 
 const BACKGROUND_KEY = 'ui-bg'
 export const ACCOUNT_KEY = 'agnai-username'
@@ -58,6 +59,7 @@ export type UserState = {
   showProfile: boolean
   tiers: AppSchema.SubscriptionTier[]
   billingLoading: boolean
+  subLoading: boolean
   subStatus?: {
     status: 'active' | 'cancelling' | 'cancelled' | 'new'
     tierId: string
@@ -303,11 +305,11 @@ export const userStore = createStore<UserState>(
       }
     },
 
-    async *retrieveSubscription({ billingLoading, tiers, sub: previous }, quiet?: boolean) {
-      if (billingLoading) return
-      yield { billingLoading: true }
+    async *retrieveSubscription({ subLoading, tiers, sub: previous }, quiet?: boolean) {
+      if (subLoading) return
+      yield { subLoading: true }
       const res = await api.post('/admin/billing/subscribe/retrieve')
-      yield { billingLoading: false }
+      yield { subLoading: false }
 
       if (res.result) {
         const next = getUserSubscriptionTier(res.result.user, tiers, previous)
@@ -324,11 +326,11 @@ export const userStore = createStore<UserState>(
       }
     },
 
-    async *validateSubscription({ billingLoading, tiers, sub: previous }, quiet?: boolean) {
-      if (billingLoading) return
-      yield { billingLoading: true }
+    async *validateSubscription({ subLoading, tiers, sub: previous }, quiet?: boolean) {
+      if (subLoading) return
+      yield { subLoading: true }
       const res = await api.post('/admin/billing/subscribe/verify')
-      yield { billingLoading: false }
+      yield { subLoading: false }
 
       if (res.result) {
         const next = getUserSubscriptionTier(res.result, tiers, previous)
@@ -375,11 +377,17 @@ export const userStore = createStore<UserState>(
       }
     },
 
-    async updateConfig(_, config: ConfigUpdate) {
+    async updateConfig({ user: prev }, config: ConfigUpdate) {
       const res = await usersApi.updateConfig(config)
       if (res.error) toastStore.error(`Failed to update config: ${res.error}`)
       if (res.result) {
         window.usePipeline = res.result.useLocalPipeline
+
+        const prevLTM = prev?.disableLTM ?? true
+        if (prevLTM && config.disableLTM === false) {
+          embedApi.initSimiliary()
+        }
+
         toastStore.success(`Updated settings`)
         return { user: res.result }
       }
@@ -663,6 +671,7 @@ export const userStore = createStore<UserState>(
         | 'third-party'
         | 'elevenlabs'
         | 'mistral'
+        | 'featherless'
     ) {
       const res = await usersApi.deleteApiKey(kind)
       if (res.error) return toastStore.error(`Failed to update settings: ${res.error}`)
@@ -695,6 +704,10 @@ export const userStore = createStore<UserState>(
 
       if (kind === 'mistral') {
         return { user: { ...user, mistralKey: '', mistralKeySet: false } }
+      }
+
+      if (kind === 'featherless') {
+        return { user: { ...user, featherlessApiKey: '', featherlessApiKeySet: false } }
       }
     },
 
@@ -796,6 +809,7 @@ function init(): UserState {
       showProfile: false,
       tiers: [],
       billingLoading: false,
+      subLoading: false,
     }
   }
 
@@ -814,6 +828,7 @@ function init(): UserState {
     showProfile: false,
     tiers: [],
     billingLoading: false,
+    subLoading: false,
   }
 }
 

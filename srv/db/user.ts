@@ -102,6 +102,7 @@ export async function createUser(newUser: NewUser, admin?: boolean) {
   const user: AppSchema.User = {
     _id: v4(),
     kind: 'user',
+    disableLTM: true,
     username,
     hash,
     admin: !!admin,
@@ -487,6 +488,11 @@ export function toSafeUser(user: AppSchema.User) {
   if (user.elevenLabsApiKey) {
     user.elevenLabsApiKey = ''
     user.elevenLabsApiKeySet = true
+  }
+
+  if (user.featherlessApiKey) {
+    user.featherlessApiKey = ''
+    user.featherlessApiKeySet = true
   }
 
   for (const svc of getRegisteredAdapters()) {

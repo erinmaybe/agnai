@@ -42,6 +42,7 @@ import SoundsPage from './pages/Sounds'
 import PatreonOauth from './pages/Settings/PatreonOauth'
 import { SagaDetail } from './pages/Saga/Detail'
 import { SagaList } from './pages/Saga/List'
+import { ImageSettingsModal } from './pages/Settings/Image/ImageSettings'
 
 const App: Component = () => {
   const state = userStore()
@@ -158,13 +159,13 @@ const Layout: Component<{ children?: any }> = (props) => {
 
           <main
             id="main-content"
-            class="w-full overflow-y-auto"
+            class="w-full overflow-y-auto overflow-x-hidden"
             classList={{
-              'sm:ml-[302px]': cfg.showMenu,
+              'sm:ml-[320px]': cfg.showMenu,
               'sm:ml-0': !cfg.showMenu,
             }}
             data-background
-            style={{ ...bgStyles(), 'scrollbar-gutter': 'stable both-edges' }}
+            style={{ ...bgStyles(), 'scrollbar-gutter': 'stable' }}
           >
             <div
               class={`mx-auto h-full min-h-full ${isChat() ? maxW() : 'max-w-8xl'}`}
@@ -212,6 +213,9 @@ const Layout: Component<{ children?: any }> = (props) => {
       <ProfileModal />
       <For each={rootModals.modals}>{(modal) => modal.element}</For>
       <ImageModal />
+      <Show when={cfg.showImgSettings}>
+        <ImageSettingsModal />
+      </Show>
       <SettingsModal />
       <div
         class="absolute bottom-0 left-0 right-0 top-0 z-10 h-[100vh] w-full bg-black bg-opacity-20 sm:hidden"

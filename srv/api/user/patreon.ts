@@ -76,7 +76,7 @@ async function identity(token: string) {
   const tiers: Patreon.Tier[] =
     identity.body.included?.filter((obj: Patreon.Include) => {
       if (obj.type !== 'tier') return false
-      return obj.relationships.campaign?.data?.id === config.patreon.campaign_id
+      return obj.relationships?.campaign?.data?.id === config.patreon.campaign_id
     }) || []
 
   const tier = tiers.length
@@ -145,12 +145,6 @@ async function revalidatePatron(userId: string | AppSchema.User) {
       sub: patron.sub ? { tierId: patron.sub._id, level: patron.sub.level } : undefined,
     },
     patreonUserId: patron.user.id,
-
-    // Handle patron level changes
-    sub:
-      patron.sub && (!user.sub || user.sub.type === 'patreon')
-        ? { type: 'patreon', level: patron.sub.level, tierId: patron.sub._id }
-        : user.sub,
   })
   await command.patron.link(patron.user.id, { userId: user._id })
   return next

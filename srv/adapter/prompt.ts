@@ -91,7 +91,8 @@ export function getStoppingStrings(opts: AdapterProps, extras: string[] = []) {
     })
   }
 
-  return Array.from(unique.values()).filter((str) => !!str)
+  const stops = Array.from(unique.values()).filter((str) => !!str)
+  return stops
 }
 
 export function getSequenceBreakers(opts: AdapterProps, format: string) {

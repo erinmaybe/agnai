@@ -46,14 +46,15 @@ export const handleThirdParty: ModelAdapter = async function* (opts) {
     opts.gen.thirdPartyFormat === 'aphrodite' ||
     opts.gen.thirdPartyFormat === 'llamacpp' ||
     opts.gen.thirdPartyFormat === 'exllamav2' ||
-    opts.gen.thirdPartyFormat === 'koboldcpp'
+    opts.gen.thirdPartyFormat === 'koboldcpp' ||
+    opts.gen.thirdPartyFormat === 'featherless'
       ? getThirdPartyPayload(opts)
       : { ...base, ...mappedSettings, prompt }
 
   // Kobold has a stop sequence parameter which automatically
   // halts generation when a certain token is generated
+  const stop_sequence = getStoppingStrings(opts).concat('END_OF_DIALOG')
   if (opts.gen.thirdPartyFormat === 'kobold' || opts.gen.thirdPartyFormat === 'koboldcpp') {
-    const stop_sequence = getStoppingStrings(opts).concat('END_OF_DIALOG')
     body.stop_sequence = stop_sequence
 
     // Kobold sampler order parameter must contain all 6 samplers to be valid
@@ -77,7 +78,10 @@ export const handleThirdParty: ModelAdapter = async function* (opts) {
   yield { prompt: body.prompt }
 
   logger.debug(`Prompt:\n${body.prompt}`)
-  logger.debug({ ...body, prompt: null, images: null, messages: null }, '3rd-party payload')
+  logger.debug(
+    { ...body, prompt: null, images: null, messages: null },
+    `3rd-party payload ${opts.gen.thirdPartyFormat}`
+  )
 
   const stream = await dispatch(opts, body)
 
@@ -114,11 +118,12 @@ export const handleThirdParty: ModelAdapter = async function* (opts) {
     }
   }
 
+  if (opts.gen.service === 'kobold' && body.model) {
+    yield { meta: { model: body.model, fmt: opts.gen.thirdPartyFormat } }
+  }
+
   const parsed = sanitise(accum)
-  const trimmed = trimResponseV2(parsed, opts.replyAs, members, characters, [
-    'END_OF_DIALOG',
-    'You:',
-  ])
+  const trimmed = trimResponseV2(parsed, opts.replyAs, members, characters, stop_sequence)
 
   yield trimmed || parsed
 }
@@ -174,6 +179,13 @@ async function dispatch(opts: AdapterProps, body: any) {
         : fullCompletion(url, body, headers, opts.gen.thirdPartyFormat, opts.log)
     }
 
+    case 'featherless': {
+      const url = 'https://api.featherless.ai/v1/completions'
+      return opts.gen.streamResponse
+        ? streamCompletion(url, body, headers, opts.gen.thirdPartyFormat, opts.log)
+        : fullCompletion(url, body, headers, opts.gen.thirdPartyFormat, opts.log)
+    }
+
     default:
       const isStreamSupported = await checkStreamSupported(`${baseURL}/api/extra/version`)
       return opts.gen.streamResponse && isStreamSupported
@@ -198,12 +210,9 @@ async function getHeaders(opts: AdapterProps) {
   const password = opts.gen.thirdPartyUrl ? opts.gen.thirdPartyKey : opts.user.thirdPartyPassword
   const headers: any = {}
 
-  if (!password) {
-    return headers
-  }
-
   switch (opts.gen.thirdPartyFormat) {
     case 'aphrodite': {
+      if (!password) return headers
       const apiKey = opts.guest ? password : decryptText(password)
       headers['x-api-key'] = apiKey
       headers['Authorization'] = `Bearer ${apiKey}`
@@ -211,20 +220,43 @@ async function getHeaders(opts: AdapterProps) {
     }
 
     case 'vllm': {
+      if (!password) return headers
       const apiKey = opts.guest ? password : decryptText(password)
       headers['Authorization'] = `Bearer ${apiKey}`
       headers['Accept'] = 'application/json'
       break
     }
     case 'tabby': {
+      if (!password) return headers
       const apiKey = opts.guest ? password : decryptText(password)
       headers['Authorization'] = `Bearer ${apiKey}`
       break
     }
 
+    case 'featherless': {
+      if (!opts.gen.featherlessModel) {
+        throw new Error(`Featherless model not set. Check your preset`)
+      }
+
+      const key = opts.gen.thirdPartyKey || opts.user.featherlessApiKey
+      if (!key) {
+        throw new Error(
+          `Featherless API key not set. Check your Settings->AI->Third-party settings`
+        )
+      }
+
+      const apiKey = key ? (opts.guest ? key : decryptText(key)) : ''
+      if (apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`
+      }
+      headers['Content-Type'] = 'application/json'
+      break
+    }
+
     case 'mistral': {
       const key = opts.user.mistralKey
-      if (!key) throw new Error(`Mistral API key not set. Check your AI->3rd-party settings`)
+      if (!key)
+        throw new Error(`Mistral API key not set. Check your Settings->AI->Third-party settings`)
 
       const apiKey = opts.guest ? key : decryptText(key)
       headers['Authorization'] = `Bearer ${apiKey}`
@@ -318,7 +350,7 @@ const streamCompletion = async function* (
     parse: false,
     json: true,
     headers: {
-      Accept: `text/event-stream`,
+      Accept: format === 'featherless' ? 'application/json' : `text/event-stream`,
       ...headers,
     },
   })
@@ -331,6 +363,11 @@ const streamCompletion = async function* (
     const events = requestStream(resp, format)
 
     for await (const event of events) {
+      if (event?.error) {
+        yield { error: event.error }
+        return
+      }
+
       if (!event.data) continue
       const data = JSON.parse(event.data) as {
         index?: number

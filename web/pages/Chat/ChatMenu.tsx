@@ -20,8 +20,11 @@ import {
   RotateCcw,
   ChevronLeft,
   Pencil,
+  Info,
+  Image,
 } from 'lucide-solid'
 import { AgnaisticModel } from '/web/shared/PresetSettings/Agnaistic'
+import { startTour } from '/web/tours'
 
 type NavProps = {
   ctx: ContextState
@@ -30,7 +33,7 @@ type NavProps = {
   adapterLabel: string
 }
 
-export const ChatHeader: Component<{
+export const ChatMenu: Component<{
   ctx: ContextState
   isOwner: boolean
 }> = (props) => {
@@ -92,7 +95,7 @@ const ChatNav: Component<NavProps> = (props) => {
         </Nav.Item>
       </Nav.DoubleItem>
 
-      <Nav.DoubleItem>
+      <Nav.DoubleItem class="tour-participants">
         <Nav.Item onClick={() => props.togglePane('participants')}>
           <Users size={size} /> Participants
         </Nav.Item>
@@ -114,12 +117,12 @@ const ChatNav: Component<NavProps> = (props) => {
         </Nav.Item>
       </Show>
 
-      <Nav.Item onClick={() => props.togglePane('ui')}>
+      <Nav.Item onClick={() => props.togglePane('ui')} class="tour-ui">
         <Palette size={size} /> UI
       </Nav.Item>
 
       <Show when={isOwner()}>
-        <Nav.Item onClick={() => props.setModal('graph')}>
+        <Nav.Item onClick={() => props.setModal('graph')} class="tour-chat-graph">
           <Map size={size} /> Chat Graph
         </Nav.Item>
       </Show>
@@ -138,6 +141,13 @@ const ChatNav: Component<NavProps> = (props) => {
         >
           <Settings size={size} aria-hidden="true" />
         </Nav.Item>
+        <Nav.Item
+          onClick={() => settingStore.imageSettings(true)}
+          ariaLabel="Image Settings"
+          tooltip="Image Settings"
+        >
+          <Image size={size} aria-hidden="true" />
+        </Nav.Item>
         <Nav.Item onClick={() => settingStore.toggleAnonymize()} tooltip="Anonymize">
           <VenetianMask size={size} />
         </Nav.Item>
@@ -150,6 +160,9 @@ const ChatNav: Component<NavProps> = (props) => {
         <Nav.Item onClick={() => props.setModal('delete')} tooltip="Delete Chat">
           <Trash size={size} />
         </Nav.Item>
+        <Nav.Item onClick={() => startTour('chat', true)} tooltip="Chat Guide" menuOpen>
+          <Info size={size} />
+        </Nav.Item>
       </div>
     </>
   )
@@ -158,7 +171,7 @@ const ChatMenuTitle: Component<NavProps> = (props) => {
   return (
     <div
       onClick={() => props.togglePane('character')}
-      class="bg-700 hover:bg-600 flex h-8 max-w-[80%] cursor-pointer items-center gap-2 rounded-md px-2"
+      class="bg-700 hover:bg-600 tour-edit-char flex h-8 max-w-[80%] cursor-pointer items-center gap-2 rounded-md px-2"
     >
       <Pencil size={16} color="var(--bg-500)" class="min-h-[12px] min-w-[12px]" />
       <span class="ellipsis text-md">{props.ctx.char?.name}</span>

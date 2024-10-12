@@ -21,20 +21,9 @@ export const novelPresets = {
     topA: 0.1,
     order: [6, 2, 3, 0, 4, 1, 5],
     disabledSamplers: [6, 5],
-    cfgScale: 1,
-    cfgOppose: '',
     streamResponse: true,
     typicalP: 1,
-    gaslight: `{{char}} Memory: {{memory}}
-Description of {{char}}: {{personality}}
-
-How {{char}} speaks: {{example_dialogue}}
-
-[ Title: Dialogue between {{char}} and {{user}}; Tags: conversation; Genre: online roleplay ]
-[ Style: chat ]
-Summary: {{scenario}}
-***
-`,
+    gaslight: templates.NovelAI,
   },
   novel_clio: {
     name: 'Clio - Talker C',
@@ -54,14 +43,7 @@ Summary: {{scenario}}
     topA: 0.075,
     order: [1, 3, 4, 0, 2],
     streamResponse: true,
-    gaslight: `{{char}} Memory: {{memory}}
-Description of {{char}}: {{personality}}
-
-How {{char}} speaks: {{example_dialogue}}
-
-[ Title: Dialogue between {{char}} and {{user}}; Tags: conversation; Genre: online roleplay ]
-***
-Summary: {{scenario}}`,
+    gaslight: templates.NovelAI,
   },
   novel_20BC: {
     name: '20BC+',

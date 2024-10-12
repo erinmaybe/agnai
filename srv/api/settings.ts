@@ -11,6 +11,8 @@ import { RegisteredAdapter } from '/common/adapters'
 import { getHordeWorkers, getHordeModels } from './horde'
 import { getOpenRouterModels } from '../adapter/openrouter'
 import { updateRegisteredSubs } from '../adapter/agnaistic'
+import { getFeatherModels } from '../adapter/featherless'
+import { filterImageModels } from '/common/image-util'
 
 const router = Router()
 
@@ -29,6 +31,10 @@ export const getPublicSubscriptions = handle(async () => {
 
 router.get('/subscriptions', getPublicSubscriptions)
 router.get('/', getSettings)
+router.get('/featherless', (_, res) => {
+  const { models, classes } = getFeatherModels()
+  res.json({ models, classes })
+})
 
 export default router
 
@@ -39,6 +45,10 @@ export async function getAppConfig(user?: AppSchema.User) {
   const openRouter = await getOpenRouterModels()
 
   const configuration = await store.admin.getServerConfiguration().catch(() => undefined)
+
+  const subs = store.subs.getCachedSubscriptions()
+  const userTier = user ? store.users.getUserSubTier(user) : undefined
+
   if (!user?.admin && configuration) {
     configuration.imagesHost = ''
     configuration.ttsHost = ''
@@ -46,12 +56,16 @@ export async function getAppConfig(user?: AppSchema.User) {
     configuration.modFieldPrompt = ''
     configuration.modPrompt = ''
     configuration.modSchema = []
+
+    configuration.imagesModels = filterImageModels(
+      user!,
+      configuration.imagesModels,
+      userTier?.tier
+    )
   }
 
   if (!appConfig) {
     await Promise.all([store.subs.prepSubscriptionCache(), store.subs.prepTierCache()])
-
-    const subs = store.subs.getCachedSubscriptions(user)
     updateRegisteredSubs()
 
     appConfig = {
@@ -80,9 +94,6 @@ export async function getAppConfig(user?: AppSchema.User) {
       serverConfig: configuration,
     }
   }
-
-  const subs = store.subs.getCachedSubscriptions()
-  const userTier = user ? store.users.getUserSubTier(user) : undefined
 
   if (user && configuration) {
     switch (configuration.apiAccess) {

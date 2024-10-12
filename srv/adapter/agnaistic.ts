@@ -27,6 +27,9 @@ import { handleVenus } from './venus'
 import { sanitise, sanitiseAndTrim, trimResponseV2 } from '/common/requests/util'
 import { obtainLock, releaseLock } from '../api/chat/lock'
 import { getServerConfiguration } from '../db/admin'
+import { handleGemini } from './gemini'
+
+export type SubscriptionPreset = Awaited<NonNullable<ReturnType<typeof getSubscriptionPreset>>>
 
 export async function getSubscriptionPreset(
   user: AppSchema.User,
@@ -228,6 +231,10 @@ export const handleAgnaistic: ModelAdapter = async function* (opts) {
       }
     }
 
+    if (subPreset.service === 'novel') {
+      opts.user.novelApiKey = userKey
+    }
+
     const stream = handler(opts)
     for await (const value of stream) {
       yield value
@@ -347,6 +354,7 @@ registerAdapter('agnaistic', handleAgnaistic, {
         label: 'Use Recommended Settings',
         helperText: 'Use the settings provided by the subscription',
         setting: { type: 'boolean' },
+        advanced: false,
       },
     ]
   },
@@ -409,7 +417,16 @@ export function getHandlers(settings: Partial<AppSchema.GenSettings>) {
     case 'kobold':
     case 'openai':
       return handlers[settings.thirdPartyFormat!]
+
+    case 'openai-chat':
+      return handlers.openai
+
+    case 'featherless':
+      return handlers.kobold
+
+    case 'gemini':
+      return handleGemini
   }
 
-  return handlers.ooba
+  return handleThirdParty
 }

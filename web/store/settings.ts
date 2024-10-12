@@ -4,14 +4,17 @@ import { EVENTS, events } from '../emitter'
 import { setAssetPrefix, storage } from '../shared/util'
 import { api } from './api'
 import { createStore, getStore } from './create'
-import { usersApi } from './data/user'
+import { InitEntities, usersApi } from './data/user'
 import { toastStore } from './toasts'
 import { subscribe } from './socket'
 import { FeatureFlags, defaultFlags } from './flags'
 import { ReplicateModel } from '/common/types/replicate'
-import { tryParse, wait } from '/common/util'
+import { getSubscriptionModelLimits, tryParse, wait } from '/common/util'
 import { ButtonSchema } from '../shared/Button'
 import { canUsePane, isMobile } from '../shared/hooks'
+import { setContextLimitStrategy } from '/common/prompt'
+import type { FeatherlessModel } from '/srv/adapter/featherless'
+import { filterImageModels } from '/common/image-util'
 
 export type SettingState = {
   guestAccessAllowed: boolean
@@ -42,7 +45,9 @@ export type SettingState = {
   }
   flags: FeatureFlags
   replicate: Record<string, ReplicateModel>
+  featherless: { models: FeatherlessModel[]; classes: Record<string, { ctx: number; res: number }> }
   showSettings: boolean
+  showImgSettings: boolean
 
   slotsLoaded: boolean
   slots: { publisherId: string; provider?: 'google' | 'ez' | 'fuse' } & Record<string, any>
@@ -58,7 +63,7 @@ const initState: SettingState = {
   guestAccessAllowed: canUseStorage(),
   initLoading: true,
   cfg: { loading: false, ttl: 0 },
-  showMenu: !isMobile(),
+  showMenu: isMobile() ? false : true,
   showImpersonate: false,
   models: [],
   workers: [],
@@ -79,8 +84,10 @@ const initState: SettingState = {
     subs: [],
   },
   replicate: {},
+  featherless: { models: [], classes: {} },
   flags: getFlags(),
   showSettings: false,
+  showImgSettings: false,
   slotsLoaded: false,
   slots: { publisherId: '' },
   overlay: false,
@@ -116,27 +123,48 @@ export const settingStore = createStore<SettingState>(
       const next = show ?? !showSettings
       return { showSettings: next }
     },
+    imageSettings({ showImgSettings }, next?: boolean) {
+      if (next === undefined) {
+        return { showImgSettings: !showImgSettings }
+      }
+
+      return { showImgSettings: next }
+    },
     async *init({ config: prev }) {
       yield { initLoading: true }
       const res = await usersApi.getInit()
 
       if (res.result) {
-        setAssetPrefix(res.result.config.assetPrefix)
-        loadSlotConfig(res.result.config?.serverConfig?.slots)
+        const init = res.result as InitEntities
+        setAssetPrefix(init.config.assetPrefix)
+        loadSlotConfig(init.config?.serverConfig?.slots)
 
-        const isMaint = res.result.config?.maintenance
+        const isMaint = init.config?.maintenance
+
+        if (init.config.serverConfig) {
+          if (!init.config.tier?.imagesAccess) {
+            init.config.serverConfig.imagesModels = []
+          } else {
+            init.config.serverConfig.imagesModels = filterImageModels(
+              init.user,
+              init.config.serverConfig.imagesModels,
+              init.config.tier
+            )
+          }
+        }
+
         if (!isMaint) {
-          events.emit(EVENTS.init, res.result)
+          events.emit(EVENTS.init, init)
         }
 
         yield {
-          init: res.result,
-          config: res.result.config,
-          replicate: res.result.replicate || {},
+          init,
+          config: init.config,
+          replicate: init.replicate || {},
           initLoading: false,
         }
 
-        const maint = res.result.config?.maintenance
+        const maint = init.config?.maintenance
 
         if (!maint && prev.maintenance) {
           toastStore.success(`Agnaistic is no longer in maintenance mode`, 10)
@@ -168,6 +196,30 @@ export const settingStore = createStore<SettingState>(
     },
     toggleImpersonate: ({ showImpersonate }, show?: boolean) => {
       return { showImpersonate: show ?? !showImpersonate }
+    },
+    async getFeatherless() {
+      const res = await api.get('/settings/featherless')
+
+      if (res.result?.models?.length) {
+        return { featherless: res.result }
+      }
+    },
+    async *getServerConfig({ cfg, config, init }) {
+      if (cfg.loading) return
+
+      yield { cfg: { loading: true, ttl: cfg.ttl } }
+      const res = await api.get<AppSchema.AppConfig>('/settings')
+      yield { cfg: { loading: false, ttl: cfg.ttl } }
+
+      const serverConfig = res.result?.serverConfig
+      if (serverConfig) {
+        serverConfig.imagesModels = filterImageModels(
+          init?.user!,
+          serverConfig.imagesModels,
+          res.result?.tier
+        )
+        return { config: { ...config, serverConfig } }
+      }
     },
     async *getConfig({ cfg }) {
       if (cfg.loading) return
@@ -232,6 +284,24 @@ export const settingStore = createStore<SettingState>(
       return { flags: nextFlags }
     },
   }
+})
+
+setContextLimitStrategy((user, gen) => {
+  const {
+    config: { subs },
+  } = settingStore.getState()
+  const { sub } = getStore('user').getState()
+  if (!gen || gen.service !== 'agnaistic') return
+
+  const tier = subs.find((sub) => sub._id === gen.registered?.agnaistic?.subscriptionId || '')
+  if (!tier) return
+
+  const level = sub?.level ?? -1
+
+  const limits = getSubscriptionModelLimits(tier.preset, level)
+  if (!limits) return
+
+  return { context: limits.maxContextLength, tokens: limits.maxTokens }
 })
 
 let firstConnection = true

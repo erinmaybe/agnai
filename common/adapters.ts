@@ -18,6 +18,12 @@ export type AdapterSetting = {
 
   setting: SettingType
   preset?: boolean
+
+  /**
+   * If enabled the setting won't be visible in "Simple" preset mode
+   * Defaults to true
+   */
+  advanced?: boolean
 }
 
 type SettingType =
@@ -31,6 +37,33 @@ export type AdapterOptions = {
   settings: AdapterSetting[]
   options: Array<keyof PresetAISettings>
   load?: (user?: AppSchema.User | null) => AdapterSetting[]
+}
+
+export const MODE_SETTINGS: {
+  [key in NonNullable<PresetAISettings['presetMode']>]?: {
+    [key in keyof AppSchema.GenSettings]?: boolean
+  }
+} = {
+  simple: {
+    maxContextLength: true,
+    maxTokens: true,
+    modelFormat: true,
+    ultimeJailbreak: true,
+    streamResponse: true,
+    temp: true,
+    localRequests: true,
+    openRouterModel: true,
+    oaiModel: true,
+    thirdPartyModel: true,
+    claudeModel: true,
+    novelModel: true,
+    mistralModel: true,
+    stopSequences: true,
+    thirdPartyKey: true,
+    thirdPartyFormat: true,
+    thirdPartyUrl: true,
+  },
+  advanced: {},
 }
 
 export const PERSONA_FORMATS = ['boostyle', 'wpp', 'sbf', 'attributes', 'text'] as const
@@ -63,6 +96,13 @@ export const THIRDPARTY_HANDLERS: { [svc in ThirdPartyFormat]: AIAdapter } = {
   mistral: 'kobold',
   ollama: 'kobold',
   vllm: 'kobold',
+  featherless: 'kobold',
+  gemini: 'kobold',
+}
+
+export const BASIC_PROMPT_ONLY: { [svc in ThirdPartyFormat]?: boolean } = {
+  featherless: true,
+  gemini: true,
 }
 
 export const THIRDPARTY_FORMATS = [
@@ -79,6 +119,8 @@ export const THIRDPARTY_FORMATS = [
   'mistral',
   'ollama',
   'vllm',
+  'featherless',
+  'gemini',
 ] as const
 
 export const AI_ADAPTERS = [
@@ -206,6 +248,41 @@ export const OPENAI_CHAT_MODELS: Record<string, boolean> = {
   [OPENAI_MODELS.O1_Mini_20240912]: true,
 }
 
+export const FLAI_CONTEXTS: Record<string, number> = {
+  'qwen2-72b-lc': 16 * 1024,
+  'qwen2-32b-lc': 16 * 1024,
+  'yi1.5-34b-lc': 16 * 1024,
+
+  'llama31-70b-16k': 16 * 1024,
+  'llama31-8b-16k': 16 * 1024,
+  'llama3-70b-8k': 8 * 1024,
+  'llama3-8b-8k': 8 * 1024,
+  'llama2-13b-4k': 4 * 1024,
+  'llama2-solar-10b7-4k': 4 * 1024,
+
+  'mistral-nemo-12b-lc': 16 * 1024,
+  'mixtral-8x22b-lc': 16 * 1024,
+  'mistral-v02-7b-std-lc': 16 * 1024,
+
+  'rwkv5-7b': 16 * 1024,
+}
+
+export type GoogleModel = keyof typeof GOOGLE_MODELS
+
+export const GOOGLE_MODELS = {
+  GEMINI_15_PRO: { id: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro' },
+  GEMINI_10_PRO_LATEST: { id: 'gemini-1.0-pro-latest', label: 'Gemini 1.0 Pro' },
+  GEMINI_15_FLASH: { id: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash' },
+  GEMINI_15_FLASH_8B: { id: 'gemini-1.5-flash-8b', label: 'Gemini 1.5 Flash 8B' },
+}
+
+export const GOOGLE_LIMITS: Record<string, number> = {
+  'gemini-1.5-pro': 2097152,
+  'gemini-1.0-pro-latest': 32768,
+  'gemini-1.5-flash': 1048576,
+  'gemini-1.5-flash-8b': 1048576,
+}
+
 /** Note: claude-v1 and claude-instant-v1 not included as they may point
  * to different models in the future. New models may be less appropriate
  * for roleplaying so they should be updated to manually
@@ -240,11 +317,16 @@ export const CLAUDE_CHAT_MODELS: Record<string, boolean> = {
 }
 
 export const NOVEL_MODELS = {
+  'llama-3-erato-v1': 'erato-v1',
   euterpe: 'euterpe-v2',
   krake: 'krake-v2',
   clio_v1: 'clio-v1',
   kayra_v1: 'kayra-v1',
 } satisfies { [key: string]: string }
+
+export const NOVEL_ALIASES: Record<string, string> = {
+  'erato-v1': 'llama-3-erato-v1',
+}
 
 export const REPLICATE_MODEL_TYPES = {
   'Auto-detect': '',
@@ -300,7 +382,7 @@ export type HordeWorker = {
 
 export const ADAPTER_LABELS: { [key in AIAdapter]: string } = {
   horde: 'Horde',
-  kobold: 'Self-host / 3rd Party',
+  kobold: 'Third-party / Self-host',
   novel: 'NovelAI',
   ooba: 'Textgen',
   openai: 'OpenAI',
@@ -389,8 +471,6 @@ export const settingLabels: { [key in keyof PresetAISettings]: string } = {
   addBosToken: 'Add BOS Token',
   antiBond: 'Anti-bond',
   banEosToken: 'Ban EOS Token',
-  cfgOppose: 'CFG Opposing Prompt',
-  cfgScale: 'CFG Scale',
   claudeModel: 'Claude Model',
   encoderRepitionPenalty: 'Encoder Repetition Penalty',
   frequencyPenalty: 'Frequency Penalty',

@@ -6,7 +6,7 @@ import { msgsApi } from './messages'
 import { AIAdapter } from '/common/adapters'
 import { decode, encode, getEncoder } from '/common/tokenize'
 import { parseTemplate } from '/common/template-parser'
-import { neat } from '/common/util'
+import { neat, wait } from '/common/util'
 import { AppSchema } from '/common/types'
 import { localApi } from './storage'
 import { subscribe } from '../socket'
@@ -114,7 +114,7 @@ export async function generateImageWithPrompt(opts: {
     }
   }
 
-  const res = await api.post<{ success: boolean }>(`/character/image`, {
+  const res = await api.post<{ success: boolean; requestId: string }>(`/character/image`, {
     prompt,
     user,
     ephemeral: true,
@@ -124,11 +124,17 @@ export async function generateImageWithPrompt(opts: {
   return res
 }
 
-type ImageResult = { image: string; file: File; data?: string; error?: string }
+export type ImageResult = { image: string; file: File; data?: string; error?: string }
 
 export async function generateImageAsync(
   prompt: string,
-  opts: { noAffix?: boolean; onTick?: (status: horde.HordeCheck) => void } = {}
+  opts: {
+    model?: string
+    requestId?: string
+    noAffix?: boolean
+    onTick?: (status: horde.HordeCheck) => void
+    onDone?: (result: { image: string; file: File; data?: string; error?: string }) => void
+  } = {}
 ): Promise<ImageResult> {
   const user = getStore('user').getState().user
   const source = `image-${v4()}`
@@ -151,16 +157,19 @@ export async function generateImageAsync(
       const file = await dataURLtoFile(image)
       const data = await getImageData(file)
 
+      opts.onDone?.({ image, file, data })
+
       return { image, file, data }
     } catch (ex: any) {
       throw ex
     }
   }
 
-  const requestId = v4()
+  const requestId = opts.requestId || v4()
 
   const promise = new Promise<ImageResult>((resolve, reject) => {
     callbacks.set(requestId, (image) => {
+      opts.onDone?.(image)
       if (image.error) return reject(new Error(image.error))
       resolve(image)
     })
@@ -172,6 +181,7 @@ export async function generateImageAsync(
     ephemeral: true,
     source,
     noAffix: opts.noAffix,
+    model: opts.model,
     requestId,
   })
 
@@ -191,17 +201,38 @@ subscribe(
 
     callbacks.delete(body.requestId)
     const url = getAssetUrl(body.image)
-    const image = await fetch(getAssetUrl(body.image)).then((res) => res.blob())
-    const file = new File([image], `${body.source}.png`, { type: 'image/png' })
 
-    const hash = md5(await image.text())
-    Object.assign(file, { hash })
+    try {
+      const image = await tryFetchImage(getAssetUrl(body.image))
+      const file = new File([image], `${body.source}.png`, { type: 'image/png' })
 
-    const data = await getImageData(file)
+      const hash = md5(await image.text())
+      Object.assign(file, { hash })
 
-    callback({ image: url, file, data })
+      const data = await getImageData(file)
+
+      callback({ image: url, file, data })
+    } catch (ex) {
+      callback({ error: 'Failed to download image', image: '', file: null as any })
+    }
   }
 )
+
+async function tryFetchImage(image: string, attempt = 1) {
+  if (attempt > 5) throw new Error(`failed to download image`)
+
+  try {
+    const res = await fetch(getAssetUrl(image), { cache: 'no-cache' })
+    if (res.status && res.status > 200) {
+      await wait(3)
+      return tryFetchImage(image, attempt + 1)
+    }
+
+    return res.blob()
+  } catch (ex) {
+    return tryFetchImage(image, attempt + 1)
+  }
+}
 
 subscribe('image-failed', { requestId: 'string', error: 'string' }, (body) => {
   const callback = callbacks.get(body.requestId)
@@ -230,7 +261,7 @@ async function createSummarizedImagePrompt(opts: PromptEntities) {
   if (canUseService && opts.user.images?.summariseChat) {
     console.log('Using', opts.settings?.service, 'to summarise')
 
-    const summary = await getChatSummary(opts.settings)
+    const summary = await getChatSummary(opts.settings, opts.user.images?.summaryPrompt)
     console.log('Image caption: ', summary)
     return summary
   }
@@ -239,7 +270,7 @@ async function createSummarizedImagePrompt(opts: PromptEntities) {
   return localApi.result({ response: prompt, meta: {} })
 }
 
-async function getChatSummary(settings: Partial<AppSchema.GenSettings>) {
+async function getChatSummary(settings: Partial<AppSchema.GenSettings>, summaryPrompt?: string) {
   const opts = await msgsApi.getActiveTemplateParts()
   opts.limit = {
     context: 1024,
@@ -247,7 +278,7 @@ async function getChatSummary(settings: Partial<AppSchema.GenSettings>) {
   }
   opts.lines = (opts.lines || []).reverse()
 
-  let template = getSummaryTemplate(settings.service!)
+  let template = getSummaryTemplate(settings.service!, summaryPrompt)
 
   if (!template) throw new Error(`No chat summary template available for "${settings.service!}"`)
 
@@ -261,21 +292,27 @@ async function getChatSummary(settings: Partial<AppSchema.GenSettings>) {
   return response
 }
 
-function getSummaryTemplate(service: AIAdapter) {
+function getSummaryTemplate(service: AIAdapter, summaryPrompt?: string) {
   switch (service) {
-    case 'novel':
+    case 'novel': {
+      const prompt =
+        summaryPrompt ||
+        `Write a detailed image caption of the current scene with a description of each character's appearance`
       return neat`
       {{char}}'s personality: {{personality}}
       [ Style: chat ]
       ***
       {{history}}
-      { Write a detailed image caption of the current scene with a description of each character's appearance }
-      `
+      { ${prompt} }`
+    }
 
     case 'openai':
     case 'openrouter':
     case 'claude':
-    case 'scale':
+    case 'scale': {
+      const prompt =
+        summaryPrompt ||
+        `Write an image caption of the current scene including the character's appearance`
       return neat`
       {{personality}}
       
@@ -283,12 +320,16 @@ function getSummaryTemplate(service: AIAdapter) {
       {{history}}
       
       {{ujb}}
-      (System: Write an image caption of the current scene including the character's appearance)
+      (System: ${prompt})
       Image caption:`
+    }
 
     case 'ooba':
     case 'kobold':
-    case 'agnaistic':
+    case 'agnaistic': {
+      const prompt =
+        summaryPrompt ||
+        `Write an image caption of the current scene using physical descriptions without names.`
       return neat`
       <system>Below is an instruction that describes a task. Write a response that completes the request.</system>
 
@@ -298,12 +339,13 @@ function getSummaryTemplate(service: AIAdapter) {
 
       Then the roleplay chat begins.
   
-      {{#each msg}}{{#if .isbot}}### Response:\n{{.name}}: {{.msg}}{{/if}}{{#if .isuser}}### Instruction:\n{{.name}}: {{.msg}}{{/if}}
+      {{#each msg}}{{#if .isbot}}<bot>{{.name}}: {{.msg}}</bot>{{/if}}{{#if .isuser}}<user>{{.name}}: {{.msg}}</user>{{/if}}
       {{/each}}
 
-      <user>Write an image caption of the current scene using physical descriptions without names.</user>
+      <user>${prompt}</user>
 
       <bot>Image caption:`
+    }
   }
 }
 

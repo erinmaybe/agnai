@@ -3,6 +3,7 @@ import { getStoppingStrings, getSequenceBreakers } from './prompt'
 import { clamp, neat } from '/common/util'
 import { JsonSchema, toJsonSchema } from '/common/prompt'
 import { defaultPresets } from '/common/default-preset'
+import { getEncoderByName } from '../tokenize'
 
 const chat_template = neat`
 {%- if messages[0]['role'] == 'system' -%}
@@ -48,6 +49,15 @@ function getBasePayload(opts: AdapterProps, stops: string[] = []) {
 
   // Agnaistic
   if (service !== 'kobold') {
+    if (!opts.contextSize) {
+      const encoder = getEncoderByName(opts.subscription?.preset?.tokenizer as any)
+      const context = encoder?.count(prompt)
+
+      if (context) {
+        opts.contextSize = context
+      }
+    }
+
     const body: any = {
       prompt,
       context_limit: gen.maxContextLength,
@@ -91,6 +101,7 @@ function getBasePayload(opts: AdapterProps, stops: string[] = []) {
       json_schema_v2: ensureSafeSchema(json_schema),
       json_schema,
       imageData: opts.imageData,
+      context_size: opts.contextSize,
     }
 
     if (gen.dynatemp_range) {
@@ -156,6 +167,26 @@ function getBasePayload(opts: AdapterProps, stops: string[] = []) {
     }
 
     return body
+  }
+
+  if (format === 'featherless') {
+    const payload: any = {
+      model: gen.featherlessModel,
+      prompt,
+      stop: getStoppingStrings(opts, stops),
+      presence_penalty: gen.presencePenalty,
+      frequency_penalty: gen.frequencyPenalty,
+      repetition_penalty: gen.repetitionPenalty,
+      temperature: gen.temp,
+      top_p: gen.topP,
+      top_k: gen.topK,
+      min_p: gen.minP,
+      max_tokens: gen.maxTokens,
+      include_stop_str_in_output: false,
+      stream: gen.streamResponse,
+    }
+
+    return payload
   }
 
   if (format === 'ollama') {
@@ -409,7 +440,6 @@ function getBasePayload(opts: AdapterProps, stops: string[] = []) {
       dynatemp_range: gen.dynatemp_range,
       dynatemp_exponent: gen.dynatemp_exponent,
       smoothing_factor: gen.smoothingFactor,
-      trim_stop: gen.trimStop,
       rep_pen_range: gen.repetitionPenaltyRange,
       rep_pen_slope: gen.repetitionPenaltySlope,
       dry_allowed_length: gen.dryAllowedLength,

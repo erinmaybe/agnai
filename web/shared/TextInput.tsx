@@ -7,10 +7,11 @@ import {
   createSignal,
   Switch,
   Match,
+  on,
 } from 'solid-js'
 import IsVisible from './IsVisible'
-import { AIAdapter, PresetAISettings, ThirdPartyFormat } from '../../common/adapters'
-import { createDebounce, isValidServiceSetting } from './util'
+import { PresetAISettings } from '../../common/adapters'
+import { createDebounce, useValidServiceSetting } from './util'
 import { getEncoder } from '/common/tokenize'
 import { useEffect } from './hooks'
 import { markdown } from './markdown'
@@ -20,6 +21,7 @@ const MIN_HEIGHT = 40
 
 type Props = {
   fieldName: string
+  prelabel?: string
   label?: string | JSX.Element
   helperText?: string | JSX.Element
   helperMarkdown?: string
@@ -42,6 +44,10 @@ type Props = {
   textarea?: JSX.TextareaHTMLAttributes<HTMLTextAreaElement>
   children?: any
   initialValue?: number | string
+  hide?: boolean
+
+  /** Do not update the input value if the value property receives a new value */
+  static?: boolean
   ref?: (ref: any) => void
 
   onKeyUp?: (
@@ -62,8 +68,6 @@ type Props = {
 
   onInputText?: (value: string) => void
 
-  service?: AIAdapter
-  format?: ThirdPartyFormat
   aiSetting?: keyof PresetAISettings
 }
 
@@ -123,12 +127,18 @@ const TextInput: Component<Props> = (props) => {
     }
   }
 
-  createEffect(() => {
-    if (props.value === undefined) return
-    if (inputRef && inputRef.value !== props.value) inputRef.value = props.value.toString()
-    resize()
-    updateCount()
-  })
+  createEffect(
+    on(
+      () => props.value,
+      () => {
+        if (props.value === undefined) return
+        if (props.static) return
+        if (inputRef && inputRef.value !== props.value) inputRef.value = props.value.toString()
+        resize()
+        updateCount()
+      }
+    )
+  )
 
   createEffect(() => {
     if (!inputRef) return
@@ -165,13 +175,21 @@ const TextInput: Component<Props> = (props) => {
     forms.emit(props.fieldName, ev.currentTarget.value)
   }
 
-  const hide = createMemo(() => {
-    const isValid = isValidServiceSetting(props.service, props.format, props.aiSetting)
-    return isValid ? '' : ' hidden'
-  })
+  const show = useValidServiceSetting(props.aiSetting)
 
   return (
-    <div class={`${hide()} ${props.parentClass || ''}`}>
+    <div
+      class={`${props.parentClass || ''}`}
+      classList={{
+        'flex gap-0': !!props.prelabel && !props.isMultiline,
+        hidden: !show() || props.parentClass?.includes('hidden') || props.hide,
+      }}
+    >
+      <Show when={props.prelabel && !props.isMultiline}>
+        <div class="bg-600 flex h-[40px] items-center rounded-l-md px-1 text-center text-sm font-bold">
+          {props.prelabel}
+        </div>
+      </Show>
       <Show when={!!props.label || !!props.helperText}>
         <label for={props.fieldName}>
           <Show when={!!props.label}>
